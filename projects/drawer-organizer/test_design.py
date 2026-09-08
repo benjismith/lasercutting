@@ -28,59 +28,57 @@ def test_pitch_snaps_so_wall_cells_match_divider_cells(design):
 
 
 def test_egg_crate_notches_are_complementary(design):
-    assert design.ear_top == 3.5 and design.slot_floor == 2.25
-    assert design.top_notch_depth == 2.25
-    assert design.top_notch_depth + design.bottom_notch_depth == design.height
+    assert design.level == 4.0 and design.slot_floor == 2.75
+    assert design.wall_slot_depth == 1.75 and design.divider_slot_depth == 1.25
+    assert design.wall_slot_depth + design.bottom_notch_depth == design.height
+    assert design.divider_slot_depth + design.bottom_notch_depth == design.level
 
 
-def test_wavy_tops_follow_the_joint_rule(design):
-    H, low, t = design.height, design.ear_top, 0.25
-    by_kind = {}
-    for p in design.panels:
-        by_kind.setdefault(p.kind, []).append(p)
-    walls = {w.name: w.outline.top_profile for w in by_kind["wall"]}
-    W, D = design.width, design.depth
-    # the two walls meeting at each corner agree on its height
-    assert walls["wall_front"](0) == walls["wall_left"](0)
-    assert walls["wall_front"](W) == walls["wall_right"](0)
-    assert walls["wall_back"](0) == walls["wall_left"](D)
-    assert walls["wall_back"](W) == walls["wall_right"](D)
-    assert len({round(walls["wall_front"](0), 6), round(walls["wall_front"](W), 6),
-                round(walls["wall_back"](0), 6), round(walls["wall_back"](W), 6)}) == 4
-    for w in by_kind["wall"]:
+def test_raised_corners_and_flat_interior(design):
+    import math
+    H, level = design.height, design.level
+    for w in (p for p in design.panels if p.kind == "wall"):
         f = w.outline.top_profile
-        swing = design.cfg.wave_swing
-        assert low + 0.4 * swing <= f(0) <= H and low + 0.4 * swing <= f(w.outline.length) <= H
-        assert low <= min(f(x / 8) for x in range(int(w.outline.length * 8))) <= H
-        for n in w.outline.top:                                   # ears never stand proud
-            assert f((n.start + n.end) / 2) >= low - 1e-9
-    for c in by_kind["column"]:
-        f = c.outline.top_profile
-        assert f(0) == low and f(c.outline.length) == low         # ends dip to the ear level
-        assert max(f(x / 8) for x in range(int(c.outline.length * 8))) > low + 0.3
-    for r in by_kind["row"]:
-        f = r.outline.top_profile
-        assert f(0) == low and f(r.outline.length) == low         # ends dip to the ear level
-        for n in r.outline.bottom[1:-1]:                          # and so does every crossing
-            assert f((n.start + n.end) / 2) == pytest.approx(low, abs=1e-9)
-    # nothing steeper than about 30 degrees anywhere, even with a 1 in swing
+        L = w.outline.length
+        for x in (0.0, 0.5, 1.0, L - 1.0, L - 0.5, L):
+            assert f(x) == H                                  # full height over the outer inch
+        assert f(1.25) == pytest.approx(level + math.sqrt(0.25 - 0.0625))   # quarter circle
+        assert f(1.5) == pytest.approx(level) and f(L - 1.5) == pytest.approx(level)
+        for x in (2.0, L / 2, L - 2.0):
+            assert f(x) == level                              # flat interior
+        for n in w.outline.top:                               # every slot sits on the flat
+            assert f(n.start) == level and f(n.end) == level
+        pts = w.outline.points()
+        assert max(y for _, y in pts) == H
+        assert sum(1 for _, y in pts if abs(y - design.slot_floor) < 1e-9) == 2 * len(w.outline.top)
     for p in design.panels:
-        f = getattr(p.outline, "top_profile", None)
-        if f is None:
-            continue
-        ys = [f(x / 16) for x in range(int(p.outline.length * 16) + 1)]
-        assert max(abs(b - a) for a, b in zip(ys, ys[1:])) <= (1 / 16) * 0.60
-    # no two column dividers share a shape, and they differ in how many crests they have
-    shapes = {tuple(c.outline.points()) for c in by_kind["column"]}
-    assert len(shapes) == len(by_kind["column"])
-    crests = {len([h for h in c.outline.top_profile.hs if h > low + 0.25]) for c in by_kind["column"]}
-    assert len(crests) > 1
+        if p.kind in ("column", "row"):
+            assert p.outline.top_profile is None and p.outline.height == level
 
 
-def test_straight_tops_when_swing_is_zero():
-    d = Design(OrganizerConfig(height=4.5, wave_swing=0, notch_depth=1.25))
-    assert all(p.outline.top_profile is None for p in d.panels if p.kind != "gusset")
-    assert d.slot_floor == 3.25
+def test_ears_are_flush(design):
+    """A column divider's top at the wall equals the wall's top there, and a row
+    divider's top equals the column divider's top where it passes through."""
+    level = design.level
+    walls = {p.name: p for p in design.panels if p.kind == "wall"}
+    for c in (p for p in design.panels if p.kind == "column"):
+        x = c.placement.origin[0] + 0.125
+        assert walls["wall_front"].outline.top_profile(x) == level == c.outline.height
+    for r in (p for p in design.panels if p.kind == "row"):
+        assert r.outline.height == level
+
+
+def test_straight_tops_when_rise_is_zero():
+    d = Design(OrganizerConfig(corner_rise=0, notch_depth=1.25))
+    assert all(getattr(p.outline, "top_profile", None) is None for p in d.panels)
+    assert d.level == 4.5 and d.slot_floor == 3.25
+
+
+def test_first_slot_clears_the_shoulder_for_any_plateau():
+    for plateau in (0.25, 1.0, 2.5, 4.0):
+        d = Design(OrganizerConfig(corner_plateau=plateau, gusset_leg=0))
+        for g in (d.column_grid, d.row_grid):
+            assert min(g.values()) - 0.125 > plateau + 0.5
 
 
 def test_panel_sizes(design):
@@ -129,7 +127,9 @@ def test_gussets(design):
 def test_no_gussets_when_leg_is_zero():
     d = Design(OrganizerConfig(gusset_leg=0))
     assert not any(p.kind == "gusset" for p in d.panels)
-    assert len(d.column_grid) == 19
+    assert len(d.column_grid) == 17   # the corner shoulders, not the gussets, now set the clearance
+    first = min(d.column_grid.values()) - 0.125
+    assert first >= 1.0 + 0.5 + 0.5    # plateau + shoulder + edge margin
 
 
 def test_cells_add_up(design):

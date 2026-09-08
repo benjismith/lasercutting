@@ -85,6 +85,56 @@ class Profile:
         return min(self.hs)
 
 
+class RaisedEnds:
+    """A flat top edge at `level` whose two ends stand `rise` higher over the outer
+    `plateau` of length, each joined to the flat by a circular shoulder. Style
+    'round' is a convex quarter circle of radius `rise` (level at the top, vertical
+    where it meets the flat); 'ogee' is an S of two quarter circles of radius
+    `rise`/2, level at both ends. Both shoulders are `rise` wide."""
+
+    ARC_STEPS = 12
+
+    def __init__(self, length: float, level: float, rise: float, plateau: float, style: str = "round"):
+        if style not in ("round", "ogee"):
+            raise ValueError("style must be 'round' or 'ogee'")
+        if rise <= 0 or plateau < 0 or 2 * (plateau + rise) > length:
+            raise ValueError("raised ends do not fit on the edge")
+        self.length, self.level, self.rise, self.plateau, self.style = length, level, rise, plateau, style
+
+    @property
+    def top(self) -> float:
+        return self.level + self.rise
+
+    def _shoulder(self, d: float) -> float:
+        """Height at distance d past the plateau, 0 <= d <= rise."""
+        r = self.rise
+        if self.style == "round":
+            return self.level + math.sqrt(max(0.0, r * r - d * d))
+        half = r / 2
+        if d <= half:
+            return self.top - half + math.sqrt(max(0.0, half * half - d * d))
+        return self.level + half - math.sqrt(max(0.0, half * half - (r - d) ** 2))
+
+    def __call__(self, x: float) -> float:
+        d = min(x, self.length - x) - self.plateau   # distance past the nearer plateau
+        if d <= 0:
+            return self.top
+        if d >= self.rise:
+            return self.level
+        return self._shoulder(d)
+
+    def samples(self, lo: float, hi: float) -> list[float]:
+        """Sample positions between lo and hi: dense on the shoulders, endpoints only
+        on the flats."""
+        xs = {lo, hi}
+        for start in (self.plateau, self.length - self.plateau - self.rise):
+            for i in range(self.ARC_STEPS + 1):
+                x = start + self.rise * i / self.ARC_STEPS
+                if lo <= x <= hi:
+                    xs.add(x)
+        return sorted(xs)
+
+
 @dataclass
 class PanelOutline:
     """A `length` x `height` rectangle with notches on any of its four edges, and
@@ -189,9 +239,14 @@ class PanelOutline:
         return out
 
     def _top_run(self, f: Callable[[float], float], lo: float, hi: float) -> list[Point]:
-        """Points along the top edge from x=hi down to x=lo, following the curve."""
+        """Points along the top edge from x=hi down to x=lo, following the curve. A
+        profile may supply its own sample positions via a `samples(lo, hi)` method;
+        otherwise the curve is sampled at a fixed chord length."""
         if self.top_profile is None:
             return [(hi, self.height), (lo, self.height)]
+        sampler = getattr(f, "samples", None)
+        if sampler is not None:
+            return [(x, f(x)) for x in reversed(sampler(lo, hi))]
         n = max(1, math.ceil((hi - lo) / PROFILE_RESOLUTION))
         return [(x, f(x)) for x in (hi - i * (hi - lo) / n for i in range(n + 1))]
 

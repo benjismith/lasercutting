@@ -2,7 +2,8 @@
 
 A floorless, finger-jointed plywood box that fits a kitchen drawer, with a grid of
 drop-in dividers. Column dividers split the drawer left to right; row dividers split
-any column front to back. Nothing is glued, so the layout can change later.
+any column front to back. The box is glued; the dividers just drop in, so the layout
+can change later.
 
 ![Assembled](renders/iso.png)
 
@@ -35,16 +36,12 @@ any column front to back. Nothing is glued, so the layout can change later.
 - **Row dividers** run left to right and drop onto the side walls and column dividers
   with the same joint. A row divider can span several columns; it then crosses the
   column dividers in between with a bottom notch at each crossing.
-- **Wavy tops.** Every wall and divider has a gently undulating top edge, and no two
-  are alike. The rule that keeps the joints modular: a piece passing through a joint
-  (a divider's ear, or a row divider at a crossing) always dips to one fixed low level
-  there, and the receiving piece's wavy edge stands above it by anywhere from nothing
-  to the full swing. Dividers are pinned to the low level at their ends and crossings;
-  walls are pinned only at the corners, where the two walls that meet share a height
-  chosen per corner. Between pins each edge wanders: a varying number of crests and
-  troughs at irregular positions and heights, with skewed rises and falls, all drawn
-  from a seed. Slot floors sit a fixed distance below the low level, so every ear has
-  the same engagement wherever it goes and any divider still fits any position.
+- **Raised corners.** Each wall stands at full height over the outer inch at both
+  ends, then drops half an inch through a quarter-round shoulder to the interior
+  level, and runs flat at that level the rest of the way. Dividers are flat at the
+  interior level. So every slot is the same depth, every divider ear is flush with the
+  edge it passes through, and the box reads as four raised corner posts around a level
+  interior. The shoulder can be a quarter circle or an S curve.
 - **Corner gussets.** A flat right-angle triangle lies on the drawer floor in each
   corner, its two legs against the walls. Two tabs along each leg pass through the wall
   and end flush with its outer face, which sits against the drawer. The walls have
@@ -63,14 +60,14 @@ All in `config.py`, all in inches.
 | parameter | default | notes |
 |---|---|---|
 | `clearance` | 1/16 per side | box is the drawer size minus twice this |
-| `height` | 4.5 | wall and divider height at the crests |
+| `height` | 4.5 | wall height at the raised corners |
 | `thickness` | 0.25 | **measure your actual stock with calipers** and set this |
 | `column_pitch` | 1.5 | target spacing of column-divider positions across the width; snapped, see below |
 | `row_pitch` | 2.5 | target spacing of row-divider positions along the depth; snapped |
-| `notch_depth` | 1.25 | how far a divider's ear engages its slot, measured from the low level |
-| `wave_swing` | 1.0 | rise and fall of the top edges, so tops run from 3.5 to 4.5; 0 for straight tops |
-| `wave_length` | 10 | rough distance between crests; feature spacing never drops below a fifth of it or 2 in, which keeps slopes gentle |
-| `wave_seed` | 1 | reshuffles every panel's highs and lows |
+| `notch_depth` | 1.25 | how far a divider's ear engages its slot, measured from the interior level |
+| `corner_rise` | 0.5 | how much higher the corners stand than the interior level; 0 for straight tops |
+| `corner_plateau` | 1.0 | length of full-height edge at each corner before the shoulder |
+| `corner_curve` | `round` | shoulder shape: `round` (quarter circle, radius = rise) or `ogee` (S of two quarter circles) |
 | `finger_width` | 0.5 | target; the real width makes an odd finger count |
 | `edge_margin` | 0.5 | solid wood kept between the outermost notch and a corner joint |
 | `gusset_leg` | 3.0 | leg length of the corner gussets; 0 removes them |
@@ -83,11 +80,9 @@ negative is left, positive is right; row index 0 is the middle of the depth, neg
 toward the front. Grid positions that would run into a gusset are dropped, so with the defaults there
 are 15 column positions and 5 row positions (19 and 7 without gussets).
 
-**Slot depths with wavy tops.** The low level is `height - wave_swing` (3.5). Slot
-floors are `notch_depth` below that (2.25 above the drawer bottom), so a wall's slots
-are 1.25 to 2.25 in deep depending on where its wave is, and every divider's bottom
-notch is 2.25 in tall. Rises and falls are capped at about 30 degrees, so a bolder
-swing spreads features out rather than steepening them.
+**Slot depths.** The interior level is `height - corner_rise` (4.0). Slot floors are
+`notch_depth` below that (2.75 above the drawer bottom), so every slot in a wall or
+column divider is 1.25 in deep and every divider's bottom notch is 2.75 in tall.
 
 **Pitch snapping.** A cell against a wall is bounded by one wall face and one divider
 face; a cell between dividers by two divider faces. For the same number of grid steps
@@ -119,12 +114,8 @@ lengths follow the columns automatically.
 |---|---|---|---|
 | long wall | 2 | 29.625 x 4.5 | passthrough |
 | short wall | 2 | 20.125 x 4.5 | passthrough |
-| column divider | 4 | 20.125 x 4.5 | passthrough |
-| row dividers | 6 | 4.66 to 10.53 x 4.5 | fit on the bed |
-
-Because of the waves, panels of the same size are no longer identical parts. Any
-column divider still fits any column position, and any row divider any position of
-its span, since the joints are the same; only the decoration differs.
+| column divider | 4 | 20.125 x 4.0 | passthrough |
+| row dividers | 6 | 4.66 to 10.53 x 4.0 | fit on the bed |
 | corner gusset | 4 | 3.25 x 3.25 | fit on the bed |
 
 Every part that runs the full depth of the drawer is just over the 19.5 in bed, so the
@@ -139,7 +130,7 @@ stock thickness get applied at that stage; the geometry here is nominal.
 
 1. **Wall height 4.5 in** in a drawer about 6 in tall, leaving generous clearance above.
 2. **Notch depth 1.25 in.** Shallow top-edge notches keep the wall tops mostly clean;
-   the dividers' 3.25 in bottom notches do the holding. The trade-off is that a divider
+   the dividers' 2.75 in bottom notches do the holding. The trade-off is that a divider
    is held sideways only by its 1.25 in ear in the wall slot, so a loose fit lets it
    rock; kerf compensation at export should aim for a snug fit.
 3. **Pitch about 1.5 in across, 2.5 in front to back,** snapped as described above.
@@ -151,14 +142,12 @@ stock thickness get applied at that stage; the geometry here is nominal.
    side. The box is glued, so they earn their keep.
 5. **Stock thickness.** Nominal 1/4 in plywood is usually 0.2 to 0.23 in. The design
    scales with `thickness`, so measure before cutting.
-6. **Wavy tops with recessed ears.** Flush ears, a long gentle wave, and
-   interchangeable dividers cannot all hold at once, since the wall's height differs at
-   each of its slot positions. Recessing every passing piece to one low level makes the
-   mismatch a consistent detail instead of an accident. The alternative, cutting each
-   divider's ears to match one specific position, would give flush joints at the cost
-   of modularity. A first version pinned every wall corner at full height and gave
-   every panel the same evenly spaced features, which made them look alike; the
-   generator was loosened so counts, positions, heights, corners and asymmetry all vary.
+6. **Raised corners instead of waves.** An earlier version gave every panel a random
+   undulating top. Because a wall's height then differed at each slot, divider ears had
+   to be recessed to stay interchangeable, and the panels stopped being identical parts.
+   Raised corners with a flat interior keep a shaped top edge while restoring flush
+   ears, uniform slots, and identical dividers. The wave generator remains in the
+   shared library for other projects.
 7. **Grain and faces.** Plywood cuts the same either side up, and the walls' outer faces
    sit against the drawer, so only the top edges and the divider faces show.
 

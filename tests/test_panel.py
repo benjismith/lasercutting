@@ -224,3 +224,37 @@ def test_curved_top_over_corner_notches_leaves_no_sliver():
     q = PanelOutline(20, 4.5, left=fingers, right=fingers, top=slots)
     assert not has_sliver(q.points())
     assert (19.75, 4.5) in q.points() and (0.25, 4.5) in q.points()
+
+
+def test_raised_ends_round_and_ogee():
+    import math
+    from lasercut.panel import RaisedEnds
+    f = RaisedEnds(20.0, 4.0, 0.5, 1.0, "round")
+    assert f(0) == 4.5 and f(1.0) == 4.5 and f(19.0) == 4.5 and f(20.0) == 4.5
+    assert f(1.5) == 4.0 and f(10.0) == 4.0 and f(18.5) == 4.0
+    assert f(1.25) == pytest.approx(4.0 + math.sqrt(0.25 - 0.0625))
+    assert f(18.75) == f(1.25)                                # symmetric
+    xs = f.samples(0.0, 20.0)
+    assert xs[0] == 0.0 and xs[-1] == 20.0 and len(xs) == 2 + 2 * 13
+    assert f.samples(2.0, 18.0) == [2.0, 18.0]                # nothing to sample on the flat
+    g = RaisedEnds(20.0, 4.0, 0.5, 1.0, "ogee")
+    assert g(1.0) == 4.5 and g(1.5) == pytest.approx(4.0) and g(1.25) == pytest.approx(4.25)
+    assert g(1.1) > 4.45 and g(1.4) < 4.05                    # level at both ends of the S
+    with pytest.raises(ValueError):
+        RaisedEnds(2.0, 4.0, 0.5, 1.0)
+
+
+def test_raised_ends_outline_is_compact():
+    import math
+    from lasercut.panel import RaisedEnds
+    f = RaisedEnds(20.0, 4.0, 0.5, 1.0)
+    slots = [Notch.centered(x, 0.25, 1.75) for x in (5.0, 10.0, 15.0)]
+    fingers = finger_notches(4.5, 0.25, 9, notch_first=True)
+    p = PanelOutline(20, 4.5, left=fingers, right=fingers, top=slots, top_profile=f)
+    pts = p.points()
+    assert not has_sliver(pts)
+    assert len(pts) < 80                                      # arcs sampled, flats not
+    assert p.area() == pytest.approx(20 * 4.0 + 2 * (1.0 * 0.5 + math.pi * 0.25 / 4)
+                                     - 2 * sum(n.width * n.depth for n in fingers if n.end <= 4.0)
+                                     - 2 * 0.25 * 0.5           # top corner finger notches
+                                     - 3 * 0.25 * 1.75, rel=0.01)
