@@ -147,8 +147,30 @@ walls and column dividers all need the passthrough. Shrinking the box to 19.5 in
 would avoid that for everything except the two long walls, at the cost of about 3/4 in
 of slop front to back.
 
-Cut files are not generated yet. When they are, kerf compensation and the measured
-stock thickness get applied at that stage; the geometry here is nominal.
+### Cut files
+
+    uv run python projects/drawer-organizer/cutfiles.py --layout three-plus-two --kerf 0.008
+
+writes `out/cut/three-plus-two.svg`, every part nested on one sheet 20 in wide (the
+most the Pro passthrough takes) with parts kept inside the 19.5 in cuttable width,
+plus `kerf-coupon.svg` and a nesting report. The SVG is in real inches, one closed
+path per part, cut strokes black, so it drops into the Glowforge app or Illustrator
+at the right size. Ease shoulders are true Bezier curves. The nested sheet is about
+58 in long; a fixed stock length (`--sheet-length 48`) splits the parts across
+several sheets instead.
+
+**Kerf.** Every part is offset outward by half the kerf before writing, so slots come
+off the laser a stock thickness wide and ears a stock thickness thick. The right kerf
+depends on the material and the laser, so cut the coupon first: it has three slots
+made for kerf settings 0.004 below, at, and 0.004 above the current value, marked
+with one, two and three score ticks. Whichever slot takes a scrap of the same stock
+with the friction you want names the kerf to pass with `--kerf`. Set `thickness` in
+the config to the measured stock before cutting the coupon, since the slots are made
+for that thickness.
+
+**Passthrough.** The walls and column dividers are longer than the 11 in bed, so the
+sheet goes through the passthrough slot and the Glowforge app steps it through in
+sections. Parts are nested as rectangles; no two are closer than 0.1 in.
 
 ## Decisions and open questions
 
@@ -195,6 +217,8 @@ stock thickness get applied at that stage; the geometry here is nominal.
   reports the cut list and cell sizes.
 - `config.py` – this drawer's numbers and the current layout.
 - `build.py` – builds the Blender scene, saves a `.blend`, renders previews.
+- `cutfiles.py` – nests every part onto a sheet and writes the SVG cut files and a
+  kerf test coupon.
 - `test_design.py` – checks the grid, the cut list, the config validation, and that no
   two panels occupy the same space at any joint.
 - `renders/` – previews from the current config.

@@ -153,6 +153,21 @@ class SteppedEnds:
                 return self._shoulder(step, d)
         return self.level
 
+    def bezier_spans(self) -> list[tuple[float, float, float, float]]:
+        """For 'ease' shoulders, (x_start, x_end, height_at_start, height_at_end) of each
+        shoulder; each is exactly one cubic Bezier with control points a third of the
+        run in from either end, at the end heights. Empty for circular styles."""
+        if self.style != "ease":
+            return []
+        spans = []
+        if self.start_step:
+            x0 = self.plateau
+            spans.append((x0, x0 + self.run, self.level + self.start_step, self.level))
+        if self.end_step:
+            x1 = self.length - self.end_plateau - self.run
+            spans.append((x1, x1 + self.run, self.level, self.level + self.end_step))
+        return spans
+
     def samples(self, lo: float, hi: float) -> list[float]:
         """Sample positions between lo and hi: dense on the shoulders, endpoints only
         on the flats."""
@@ -399,6 +414,28 @@ def simplify(pts: list[Point]) -> list[Point]:
             kept.append(p)
         pts = kept
     return pts
+
+
+def offset_polygon(pts: list[Point], delta: float) -> list[Point]:
+    """Move every edge of a simple counter-clockwise polygon outward by `delta`
+    (inward for negative), joining edges with mitres. Used for kerf compensation:
+    offsetting a part outward by half the kerf makes it come off the laser at its
+    nominal size, with slots narrowed to match."""
+    n = len(pts)
+    out: list[Point] = []
+    for i in range(n):
+        p0, p1, p2 = pts[i - 1], pts[i], pts[(i + 1) % n]
+        n1 = _outward_normal(p0, p1)
+        n2 = _outward_normal(p1, p2)
+        k = delta / (1 + n1[0] * n2[0] + n1[1] * n2[1])
+        out.append((p1[0] + k * (n1[0] + n2[0]), p1[1] + k * (n1[1] + n2[1])))
+    return out
+
+
+def _outward_normal(a: Point, b: Point) -> Point:
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    length = math.hypot(dx, dy)
+    return (dy / length, -dx / length)
 
 
 def polygon_area(pts: list[Point]) -> float:
