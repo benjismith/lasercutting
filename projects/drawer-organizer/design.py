@@ -56,7 +56,7 @@ class OrganizerConfig:
     notch_depth: float | None = None  # how far a divider's ear engages a slot; default half the interior level
     corner_rise: float = 0.5        # how much higher the corners stand than the interior level
     corner_plateau: float = 1.0     # length of full-height edge at each corner before the shoulder
-    corner_curve: str = "round"     # shoulder shape: 'round' (quarter circle) or 'ogee' (S curve)
+    corner_curve: str = "ogee"      # shoulder shape: 'ogee' (S of two quarter circles) or 'round' (one quarter circle)
     finger_width: float = 0.5       # target finger width at the corners
     edge_margin: float = 0.5        # solid material kept between a grid notch and a corner joint
     gusset_leg: float = 3.0         # leg length of the corner gussets; 0 for none

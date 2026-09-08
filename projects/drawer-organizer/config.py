@@ -22,7 +22,7 @@ CONFIG = OrganizerConfig(
     notch_depth=1.25,
     corner_rise=0.5,
     corner_plateau=1.0,
-    corner_curve="round",
+    corner_curve="ogee",
     gusset_leg=3.0,
     gusset_tabs=2,
     # Column dividers at these grid positions (left to right): three equal columns of

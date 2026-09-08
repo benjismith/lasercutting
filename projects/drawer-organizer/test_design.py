@@ -42,7 +42,8 @@ def test_raised_corners_and_flat_interior(design):
         L = w.outline.length
         for x in (0.0, 0.5, 1.0, L - 1.0, L - 0.5, L):
             assert f(x) == H                                  # full height over the outer inch
-        assert f(1.25) == pytest.approx(level + math.sqrt(0.25 - 0.0625))   # quarter circle
+        assert f(1.25) == pytest.approx(level + 0.25)          # middle of the S, where the two arcs meet
+        assert f(1.1) > H - 0.05 and f(1.4) < level + 0.05      # eases out of both levels
         assert f(1.5) == pytest.approx(level) and f(L - 1.5) == pytest.approx(level)
         for x in (2.0, L / 2, L - 2.0):
             assert f(x) == level                              # flat interior

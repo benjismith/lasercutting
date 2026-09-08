@@ -13,6 +13,8 @@ can change later.
 
 ![Left wall from outside](renders/left.png)
 
+![Corner shoulder, front wall, left end](renders/shoulder.png)
+
 ## The drawer
 
 | | inches |
@@ -37,11 +39,12 @@ can change later.
   with the same joint. A row divider can span several columns; it then crosses the
   column dividers in between with a bottom notch at each crossing.
 - **Raised corners.** Each wall stands at full height over the outer inch at both
-  ends, then drops half an inch through a quarter-round shoulder to the interior
-  level, and runs flat at that level the rest of the way. Dividers are flat at the
-  interior level. So every slot is the same depth, every divider ear is flush with the
-  edge it passes through, and the box reads as four raised corner posts around a level
-  interior. The shoulder can be a quarter circle or an S curve.
+  ends, then drops half an inch through an S-shaped shoulder to the interior level,
+  and runs flat at that level the rest of the way. The S is two quarter circles of
+  quarter-inch radius, convex then concave, so it leaves the plateau level and arrives
+  on the flat level. Dividers are flat at the interior level. So every slot is the
+  same depth, every divider ear is flush with the edge it passes through, and the box
+  reads as four raised corner posts around a level interior.
 - **Corner gussets.** A flat right-angle triangle lies on the drawer floor in each
   corner, its two legs against the walls. Two tabs along each leg pass through the wall
   and end flush with its outer face, which sits against the drawer. The walls have
@@ -67,7 +70,7 @@ All in `config.py`, all in inches.
 | `notch_depth` | 1.25 | how far a divider's ear engages its slot, measured from the interior level |
 | `corner_rise` | 0.5 | how much higher the corners stand than the interior level; 0 for straight tops |
 | `corner_plateau` | 1.0 | length of full-height edge at each corner before the shoulder |
-| `corner_curve` | `round` | shoulder shape: `round` (quarter circle, radius = rise) or `ogee` (S of two quarter circles) |
+| `corner_curve` | `ogee` | shoulder shape: `ogee` (S of two quarter circles, radius = rise/2) or `round` (one quarter circle, radius = rise, meeting the flat vertically) |
 | `finger_width` | 0.5 | target; the real width makes an odd finger count |
 | `edge_margin` | 0.5 | solid wood kept between the outermost notch and a corner joint |
 | `gusset_leg` | 3.0 | leg length of the corner gussets; 0 removes them |
