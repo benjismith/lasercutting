@@ -132,14 +132,49 @@ def test_curved_top_rejects_bad_profiles():
                      top_profile=Profile([(0, 4.5), (5, 4.0), (10, 4.5)])).points()
 
 
-def test_undulation_hits_anchors_and_stays_in_range():
+def test_wander_hits_anchors_and_stays_in_range():
     import random
-    from lasercut.wave import undulation
-    f = undulation(20.0, [8.0], 4.0, 0.5, 10.0, +1, random.Random("t"))
+    from lasercut.wave import wander
+    f = wander(20.0, [(0.0, 4.0), (8.0, 4.0), (20.0, 4.0)], 4.0, 4.5, 10.0, random.Random("t"))
     for x in (0.0, 8.0, 20.0):
         assert f(x) == 4.0
     samples = [f(x / 10) for x in range(201)]
     assert 4.0 <= min(samples) and max(samples) <= 4.5
-    assert max(samples) > 4.3
-    g = undulation(20.0, [], 4.5, 0.5, 10.0, -1, random.Random("u"))
-    assert g(0) == 4.5 and g(20) == 4.5 and min(g(x / 10) for x in range(201)) < 4.2
+    assert max(samples) > 4.25
+    g = wander(29.0, [(0.0, 4.4), (29.0, 4.2)], 4.0, 4.5, 10.0, random.Random("u"))
+    assert g(0) == 4.4 and g(29) == 4.2
+    # gentle: no chord steeper than about 25 degrees
+    ys = [g(x / 8) for x in range(233)]
+    assert max(abs(b - a) for a, b in zip(ys, ys[1:])) < 0.125 * 0.47
+    with pytest.raises(ValueError):
+        wander(10.0, [(1.0, 4.0), (10.0, 4.0)], 4.0, 4.5, 10.0, random.Random(1))
+
+
+def test_different_seeds_give_different_profiles():
+    import random
+    from lasercut.wave import wander
+    pins = [(0.0, 4.0), (20.0, 4.0)]
+    shapes = {tuple(round(wander(20.0, pins, 4.0, 4.5, 10.0, random.Random(seed))(x / 4), 4)
+                    for x in range(81)) for seed in range(6)}
+    assert len(shapes) == 6
+
+
+def test_skewed_profile_keeps_ends_level():
+    from lasercut.panel import Profile
+    f = Profile([(0, 4.0), (10, 4.5)], skews=[1.4])
+    assert f(0) == 4.0 and f(10) == 4.5
+    assert f(5) < 4.25                          # reaches the far level late
+    assert abs(f(0.1) - 4.0) < 0.001 and abs(f(9.9) - 4.5) < 0.001
+    with pytest.raises(ValueError):
+        Profile([(0, 4.0), (10, 4.5)], skews=[0.4])
+
+
+def test_side_notches_clip_to_a_low_corner():
+    from lasercut.panel import Profile
+    fingers = finger_notches(4.5, 0.25, 9, notch_first=True)   # top slot is a notch
+    f = Profile([(0, 4.2), (5, 4.5), (10, 4.3)])
+    p = PanelOutline(10, 4.5, left=fingers, right=fingers, top_profile=f)
+    pts = p.points()
+    assert max(y for _, y in pts) <= 4.5 + 1e-9
+    assert (0.25, 4.2) in pts and (9.75, 4.3) in pts       # clipped notch corners
+    assert not any(abs(x) < 1e-9 and y > 4.2 + 1e-9 for x, y in pts)

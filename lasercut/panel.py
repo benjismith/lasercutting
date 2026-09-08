@@ -50,14 +50,21 @@ class Notch:
 class Profile:
     """A smooth height-along-x curve through control points, using cosine
     interpolation so the curve is level at every control point. Each control point is
-    therefore a crest, a trough, or a flat anchor."""
+    therefore a crest, a trough, or a flat anchor. An optional skew per segment
+    (1 is symmetric; below 1 reaches the far level early, above 1 late) makes rises
+    and falls asymmetric while keeping the ends level."""
 
-    def __init__(self, points: list[Point]):
+    def __init__(self, points: list[Point], skews: list[float] | None = None):
         pts = sorted(points)
         if len(pts) < 2:
             raise ValueError("a profile needs at least two control points")
         self.xs = [p[0] for p in pts]
         self.hs = [p[1] for p in pts]
+        self.skews = list(skews) if skews else [1.0] * (len(pts) - 1)
+        if len(self.skews) != len(pts) - 1:
+            raise ValueError("one skew per segment")
+        if any(g <= 0.5 for g in self.skews):
+            raise ValueError("skews must be above 0.5 to keep the ends level")
 
     def __call__(self, x: float) -> float:
         if x <= self.xs[0]:
@@ -66,7 +73,7 @@ class Profile:
             return self.hs[-1]
         i = bisect.bisect_right(self.xs, x) - 1
         x0, x1, h0, h1 = self.xs[i], self.xs[i + 1], self.hs[i], self.hs[i + 1]
-        u = (x - x0) / (x1 - x0)
+        u = ((x - x0) / (x1 - x0)) ** self.skews[i]
         return h0 + (h1 - h0) * (1 - math.cos(math.pi * u)) / 2
 
     @property
@@ -142,7 +149,7 @@ class PanelOutline:
             for n in sorted(self.bottom, key=lambda n: n.start):
                 pts += [(n.start, 0.0), (n.start, n.depth), (n.end, n.depth), (n.end, 0.0)]
             pts.append((L, 0.0))
-            for n in sorted(self.right, key=lambda n: n.start):
+            for n in self._clipped(self.right, f(L)):
                 pts += [(L, n.start), (L - n.depth, n.start), (L - n.depth, n.end), (L, n.end)]
             x = L
             for n in sorted(self.top, key=lambda n: n.start, reverse=True):
@@ -150,10 +157,21 @@ class PanelOutline:
                 pts += [(n.end, H - n.depth), (n.start, H - n.depth)]
                 x = n.start
             pts += self._top_run(f, 0.0, x)
-            for n in sorted(self.left, key=lambda n: n.start, reverse=True):
+            for n in reversed(self._clipped(self.left, f(0.0))):
                 pts += [(0.0, n.end), (n.depth, n.end), (n.depth, n.start), (0.0, n.start)]
             self._points = simplify(pts)
         return list(self._points)
+
+    @staticmethod
+    def _clipped(notches: list[Notch], top: float) -> list[Notch]:
+        """Side-edge notches sorted upward, cut off where the curved top edge is
+        lower than the panel's nominal height."""
+        out = []
+        for n in sorted(notches, key=lambda n: n.start):
+            if n.start >= top - EPS:
+                continue
+            out.append(n if n.end <= top + EPS else Notch(n.start, top, n.depth))
+        return out
 
     def _top_run(self, f: Callable[[float], float], lo: float, hi: float) -> list[Point]:
         """Points along the top edge from x=hi down to x=lo, following the curve."""

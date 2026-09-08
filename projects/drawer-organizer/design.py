@@ -15,9 +15,10 @@ through the bottom edges of both walls they touch, to keep the glued box square.
 Top edges undulate. The rule that keeps the joints modular: a piece passing through a
 joint (a divider's end, or a row divider at a crossing) always dips to one fixed low
 level there, while the receiving piece's wavy edge stands above it by up to the
-swing. Walls anchor high at the corners and dip between; dividers anchor low at their
-ends and crossings and crest between. Slot floors sit at a fixed level below the low
-level, so every ear keeps the same engagement wherever it goes.
+swing. Dividers anchor low at their ends and crossings and wander between; walls
+wander freely between the low level and the full height, meeting at whatever height
+each corner was given. Slot floors sit at a fixed level below the low level, so every
+ear keeps the same engagement wherever it goes.
 
 Coordinates: X runs left to right across the drawer, Y front to back, Z up. The box's
 outer footprint is [0, width] x [0, depth]; the front wall is at y=0.
@@ -32,7 +33,7 @@ from dataclasses import dataclass, field
 from lasercut.glowforge import bed_fit
 from lasercut.panel import (Notch, Panel, PanelOutline, Placement, Profile, corner_gusset, even_tab_spans,
                             finger_notches, odd_finger_count)
-from lasercut.wave import undulation
+from lasercut.wave import wander
 
 
 @dataclass(frozen=True)
@@ -221,16 +222,35 @@ class Design:
                 panels.append(Panel(name, gusset, t, Placement.flat(origin, sx, sy), "gusset"))
         return panels
 
+    def corner_height(self, corner: str) -> float:
+        """Height of the walls where they meet at a corner ('front_left' etc.), the
+        same for both walls. Kept in the upper part of the range so the top corner
+        finger is never a sliver."""
+        cfg = self.cfg
+        rng = random.Random(f"{cfg.wave_seed}:corner:{corner}")
+        return rng.uniform(self.ear_top + 0.4 * cfg.wave_swing, self.height)
+
+    WALL_CORNERS = {
+        "wall_front": ("front_left", "front_right"),
+        "wall_back": ("back_left", "back_right"),
+        "wall_left": ("front_left", "back_left"),
+        "wall_right": ("front_right", "back_right"),
+    }
+
     def _wave(self, name: str, length: float, kind: str, anchors: list[float] = ()) -> Profile | None:
-        """Top-edge profile for one panel, or None for a straight top. Walls anchor at
-        the full height and dip; dividers anchor at the ear level and rise."""
+        """Top-edge profile for one panel, or None for a straight top. Walls are
+        pinned only at their corners; dividers are pinned to the ear level at their
+        ends and crossings. Everything else is left to `wander`."""
         cfg = self.cfg
         if cfg.wave_swing <= 0:
             return None
         rng = random.Random(f"{cfg.wave_seed}:{name}")
         if kind == "wall":
-            return undulation(length, [], self.height, cfg.wave_swing, cfg.wave_length, -1, rng)
-        return undulation(length, list(anchors), self.ear_top, cfg.wave_swing, cfg.wave_length, +1, rng)
+            a, b = self.WALL_CORNERS[name]
+            pins = [(0.0, self.corner_height(a)), (length, self.corner_height(b))]
+        else:
+            pins = [(0.0, self.ear_top), (length, self.ear_top)] + [(x, self.ear_top) for x in anchors]
+        return wander(length, pins, self.ear_top, self.height, cfg.wave_length, rng)
 
     def _gusset_notches(self, wall_length: float) -> list[Notch]:
         """Bottom-edge notches at both ends of a wall for the gusset tabs. Spans are

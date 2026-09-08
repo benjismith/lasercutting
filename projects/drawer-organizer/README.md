@@ -37,10 +37,12 @@ any column front to back. Nothing is glued, so the layout can change later.
   are alike. The rule that keeps the joints modular: a piece passing through a joint
   (a divider's ear, or a row divider at a crossing) always dips to one fixed low level
   there, and the receiving piece's wavy edge stands above it by anywhere from nothing
-  to the full swing. Walls anchor at full height at the corners and dip between them;
-  dividers anchor at the low level at their ends and crossings and crest between. Slot
-  floors sit a fixed distance below the low level, so every ear has the same engagement
-  wherever it goes and any divider still fits any position.
+  to the full swing. Dividers are pinned to the low level at their ends and crossings;
+  walls are pinned only at the corners, where the two walls that meet share a height
+  chosen per corner. Between pins each edge wanders: a varying number of crests and
+  troughs at irregular positions and heights, with skewed rises and falls, all drawn
+  from a seed. Slot floors sit a fixed distance below the low level, so every ear has
+  the same engagement wherever it goes and any divider still fits any position.
 - **Corner gussets.** A flat right-angle triangle lies on the drawer floor in each
   corner, its two legs against the walls. Two tabs along each leg pass through the wall
   and end flush with its outer face, which sits against the drawer. The walls have
@@ -65,7 +67,7 @@ All in `config.py`, all in inches.
 | `row_pitch` | 2.5 | target spacing of row-divider positions along the depth; snapped |
 | `notch_depth` | 1.25 | how far a divider's ear engages its slot, measured from the low level |
 | `wave_swing` | 0.5 | rise and fall of the top edges, so tops run from 4.0 to 4.5; 0 for straight tops |
-| `wave_length` | 10 | typical distance between crests |
+| `wave_length` | 10 | rough distance between crests; feature spacing never drops below a fifth of it or 2 in, which keeps slopes gentle |
 | `wave_seed` | 1 | reshuffles every panel's highs and lows |
 | `finger_width` | 0.5 | target; the real width makes an odd finger count |
 | `edge_margin` | 0.5 | solid wood kept between the outermost notch and a corner joint |
@@ -151,7 +153,9 @@ stock thickness get applied at that stage; the geometry here is nominal.
    each of its slot positions. Recessing every passing piece to one low level makes the
    mismatch a consistent detail instead of an accident. The alternative, cutting each
    divider's ears to match one specific position, would give flush joints at the cost
-   of modularity.
+   of modularity. A first version pinned every wall corner at full height and gave
+   every panel the same evenly spaced features, which made them look alike; the
+   generator was loosened so counts, positions, heights, corners and asymmetry all vary.
 7. **Grain and faces.** Plywood cuts the same either side up, and the walls' outer faces
    sit against the drawer, so only the top edges and the divider faces show.
 

@@ -38,9 +38,18 @@ def test_wavy_tops_follow_the_joint_rule(design):
     by_kind = {}
     for p in design.panels:
         by_kind.setdefault(p.kind, []).append(p)
+    walls = {w.name: w.outline.top_profile for w in by_kind["wall"]}
+    W, D = design.width, design.depth
+    # the two walls meeting at each corner agree on its height
+    assert walls["wall_front"](0) == walls["wall_left"](0)
+    assert walls["wall_front"](W) == walls["wall_right"](0)
+    assert walls["wall_back"](0) == walls["wall_left"](D)
+    assert walls["wall_back"](W) == walls["wall_right"](D)
+    assert len({round(walls["wall_front"](0), 6), round(walls["wall_front"](W), 6),
+                round(walls["wall_back"](0), 6), round(walls["wall_back"](W), 6)}) == 4
     for w in by_kind["wall"]:
         f = w.outline.top_profile
-        assert f(0) == H and f(w.outline.length) == H            # corners full height
+        assert low + 0.4 * 0.5 <= f(0) <= H and low + 0.4 * 0.5 <= f(w.outline.length) <= H
         assert low <= min(f(x / 8) for x in range(int(w.outline.length * 8))) <= H
         for n in w.outline.top:                                   # ears never stand proud
             assert f((n.start + n.end) / 2) >= low - 1e-9
@@ -53,9 +62,11 @@ def test_wavy_tops_follow_the_joint_rule(design):
         assert f(0) == low and f(r.outline.length) == low         # ends dip to the ear level
         for n in r.outline.bottom[1:-1]:                          # and so does every crossing
             assert f((n.start + n.end) / 2) == pytest.approx(low, abs=1e-9)
-    # no two column dividers share a shape
+    # no two column dividers share a shape, and they differ in how many crests they have
     shapes = {tuple(c.outline.points()) for c in by_kind["column"]}
     assert len(shapes) == len(by_kind["column"])
+    crests = {len([h for h in c.outline.top_profile.hs if h > low + 0.25]) for c in by_kind["column"]}
+    assert len(crests) > 1
 
 
 def test_straight_tops_when_swing_is_zero():
