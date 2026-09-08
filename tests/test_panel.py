@@ -176,7 +176,9 @@ def test_side_notches_clip_to_a_low_corner():
     p = PanelOutline(10, 4.5, left=fingers, right=fingers, top_profile=f)
     pts = p.points()
     assert max(y for _, y in pts) <= 4.5 + 1e-9
-    assert (0.25, 4.2) in pts and (9.75, 4.3) in pts       # clipped notch corners
+    # clipped notch corners (the curve may add a hair of height at the inner face)
+    assert any(x == 0.25 and abs(y - 4.2) < 0.002 for x, y in pts)
+    assert any(x == 9.75 and abs(y - 4.3) < 0.002 for x, y in pts)
     assert not any(abs(x) < 1e-9 and y > 4.2 + 1e-9 for x, y in pts)
 
 
@@ -189,3 +191,36 @@ def test_wander_caps_the_slope():
     ys = [f(x / 32) for x in range(12 * 32 + 1)]
     assert max(abs(b - a) for a, b in zip(ys, ys[1:])) <= (1 / 32) * math.tan(math.radians(31))
     assert f(0) == 3.5 and f(12) == 3.5
+
+
+def has_sliver(pts):
+    """True if the outline doubles back on itself: two consecutive edges pointing in
+    nearly opposite directions."""
+    n = len(pts)
+    for i in range(n):
+        (ax, ay), (bx, by), (cx, cy) = pts[i - 1], pts[i], pts[(i + 1) % n]
+        ux, uy, vx, vy = bx - ax, by - ay, cx - bx, cy - by
+        lu, lv = (ux * ux + uy * uy) ** 0.5, (vx * vx + vy * vy) ** 0.5
+        if lu == 0 or lv == 0:
+            return True
+        cos = (ux * vx + uy * vy) / (lu * lv)
+        if cos < -0.999:
+            return True
+    return False
+
+
+def test_curved_top_over_corner_notches_leaves_no_sliver():
+    from lasercut.panel import Profile
+    fingers = finger_notches(4.5, 0.25, 9, notch_first=True)
+    f = Profile([(0, 4.3), (7, 3.6), (14, 4.4), (20, 4.1)])
+    slots = [Notch.centered(x, 0.25, 2.25) for x in (5.0, 10.0, 15.0)]
+    p = PanelOutline(20, 4.5, left=fingers, right=fingers, top=slots, top_profile=f)
+    pts = p.points()
+    assert not has_sliver(pts)
+    # nothing above the top corner notches within the neighbouring wall's thickness
+    assert all(y <= 4.0 + 1e-9 for x, y in pts if x < 0.25 - 1e-9 or x > 19.75 + 1e-9)
+    assert sum(1 for x, y in pts if abs(y - 2.25) < 1e-9) == 6
+    # and the plain rectangular case is unchanged
+    q = PanelOutline(20, 4.5, left=fingers, right=fingers, top=slots)
+    assert not has_sliver(q.points())
+    assert (19.75, 4.5) in q.points() and (0.25, 4.5) in q.points()

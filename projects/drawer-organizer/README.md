@@ -10,6 +10,8 @@ any column front to back. Nothing is glued, so the layout can change later.
 
 ![Corner gusset, dropped out of its slots](renders/corner.png)
 
+![Left wall from outside](renders/left.png)
+
 ## The drawer
 
 | | inches |

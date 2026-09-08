@@ -149,16 +149,31 @@ class PanelOutline:
             for n in sorted(self.bottom, key=lambda n: n.start):
                 pts += [(n.start, 0.0), (n.start, n.depth), (n.end, n.depth), (n.end, 0.0)]
             pts.append((L, 0.0))
-            for n in self._clipped(self.right, f(L)):
-                pts += [(L, n.start), (L - n.depth, n.start), (L - n.depth, n.end), (L, n.end)]
-            x = L
+            # A side notch that reaches the top edge removes the corner, so the top
+            # edge must start (or end) at the notch's inner face, not at the corner;
+            # otherwise a curved top leaves a zero-width sliver over the notch.
+            right = self._clipped(self.right, f(L))
+            x_start = L
+            for n in right:
+                pts += [(L, n.start), (L - n.depth, n.start), (L - n.depth, n.end)]
+                if n.end >= f(L) - EPS:
+                    x_start = L - n.depth
+                else:
+                    pts.append((L, n.end))
+            left = self._clipped(self.left, f(0.0))
+            x_end = 0.0
+            if left and left[-1].end >= f(0.0) - EPS:
+                x_end = left[-1].depth
+            x = x_start
             for n in sorted(self.top, key=lambda n: n.start, reverse=True):
                 pts += self._top_run(f, n.end, x)
                 pts += [(n.end, H - n.depth), (n.start, H - n.depth)]
                 x = n.start
-            pts += self._top_run(f, 0.0, x)
-            for n in reversed(self._clipped(self.left, f(0.0))):
-                pts += [(0.0, n.end), (n.depth, n.end), (n.depth, n.start), (0.0, n.start)]
+            pts += self._top_run(f, x_end, x)
+            for n in reversed(left):
+                if n.end < f(0.0) - EPS:
+                    pts.append((0.0, n.end))
+                pts += [(n.depth, n.end), (n.depth, n.start), (0.0, n.start)]
             self._points = simplify(pts)
         return list(self._points)
 
@@ -258,10 +273,17 @@ def _close(a: Point, b: Point) -> bool:
 
 
 def simplify(pts: list[Point]) -> list[Point]:
-    """Drop repeated points and any point lying on the straight line through its
-    neighbours. That also removes the spikes the edge walk leaves at a notched
-    corner (it steps to the corner and straight back)."""
-    pts = list(pts)
+    """Drop repeated points, then any point lying on the straight line through its
+    neighbours. The second step also removes the spikes the edge walk leaves at a
+    notched corner (it steps to the corner and straight back). Duplicates go first
+    so a real corner visited twice is not mistaken for a spike."""
+    deduped: list[Point] = []
+    for p in pts:
+        if not deduped or not _close(p, deduped[-1]):
+            deduped.append(p)
+    while len(deduped) > 1 and _close(deduped[0], deduped[-1]):
+        deduped.pop()
+    pts = deduped
     changed = True
     while changed and len(pts) > 3:
         changed = False
@@ -269,7 +291,7 @@ def simplify(pts: list[Point]) -> list[Point]:
         n = len(pts)
         for i, p in enumerate(pts):
             a, b = pts[i - 1], pts[(i + 1) % n]
-            if _close(p, a) or abs(_cross(a, p, b)) < EPS:
+            if abs(_cross(a, p, b)) < EPS:
                 changed = True
                 continue
             kept.append(p)
