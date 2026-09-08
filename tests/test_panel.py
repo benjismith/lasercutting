@@ -276,3 +276,14 @@ def test_stepped_ends_with_a_dropped_end():
     r = SteppedEnds(20.0, 4.0, 0.0, -0.5, 1.0, "round")
     assert r(18.5) == pytest.approx(4.0) and r(19.0) == 3.5
     assert r(18.75) == pytest.approx(4.0 - (0.25 - 0.0625) ** 0.5)
+
+
+def test_stepped_ends_with_a_long_low_end():
+    from lasercut.panel import SteppedEnds
+    f = SteppedEnds(20.0, 4.0, 0.5, -0.5, 1.0, "ogee", end_plateau=4.0)
+    assert f(1.0) == 4.5 and f(1.5) == pytest.approx(4.0)
+    assert f(15.5) == 4.0 and f(15.75) == pytest.approx(3.75) and f(16.0) == pytest.approx(3.5)
+    assert f(17.0) == 3.5 and f(20.0) == 3.5
+    assert len(f.samples(15.0, 20.0)) == 2 + 13
+    with pytest.raises(ValueError):
+        SteppedEnds(20.0, 4.0, 0.5, -0.5, 1.0, end_plateau=19.0)

@@ -51,19 +51,26 @@ def test_tops_front_corners_flat_interior_dropped_back(design):
     b = walls["wall_back"].outline.top_profile
     for x in (0.0, 1.0, W / 2, W - 1.0, W):
         assert b(x) == back                                    # back wall flat at the back level
+    last_slot_end = max(design.row_grid.values()) + 0.125
+    step_start = last_slot_end + 0.5                           # the step begins one gap past the last slot
+    assert design.back_plateau == pytest.approx(D - step_start - 0.5)
+    assert design.back_plateau > 3.5                           # the lowered band is most of the back quarter
     for name in ("wall_left", "wall_right"):
         g = walls[name].outline.top_profile
         assert g(0) == H and g(1.0) == H                       # front end raised
-        assert g(2.0) == level and g(D - 2.0) == level         # flat interior
-        assert g(D - 1.25) == pytest.approx(level - 0.25)      # inverted S, middle
-        assert g(D - 1.4) > level - 0.05 and g(D - 1.1) < back + 0.05
-        assert g(D - 1.0) == back and g(D) == back             # back end at the back level
+        assert g(2.0) == level and g(D / 2) == level           # flat interior
+        assert g(last_slot_end) == level and g(step_start) == pytest.approx(level)
+        assert g(step_start + 0.25) == pytest.approx(level - 0.25)   # inverted S, middle
+        assert g(step_start + 0.1) > level - 0.05 and g(step_start + 0.4) < back + 0.05
+        for x in (step_start + 0.5, D - 2.0, D - 1.0, D):
+            assert g(x) == pytest.approx(back)                 # lowered band right to the back
         for n in walls[name].outline.top:
             assert g(n.start) == level and g(n.end) == level   # every slot on the flat
     for p in design.panels:
         if p.kind == "column":
             c = p.outline.top_profile
-            assert c(0) == level and c(D / 2) == level and c(D - 1.0) == back and c(D) == back
+            assert c(0) == level and c(D / 2) == level and c(last_slot_end) == level
+            assert c(step_start + 0.5) == pytest.approx(back) and c(D) == back
             for n in p.outline.top:
                 assert c(n.start) == level
         if p.kind == "row":

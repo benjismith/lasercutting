@@ -46,8 +46,9 @@ can change later.
   circles of quarter-inch radius, convex then concave, so it leaves one level and
   arrives on the other smoothly. The back edge of the whole box sits half an inch
   below the interior level: the back wall is flat at that height for its full
-  length, and the side walls and column dividers step down to it over their last
-  inch through the same S inverted. Row dividers are flat at the interior level.
+  length, and the side walls and column dividers step down to it through the same S
+  inverted, half an inch past the last row slot, so everything behind the last row
+  position sits at the back level. Row dividers are flat at the interior level.
   Every divider ear is flush with the edge it passes through, front and back.
 - **Corner gussets.** A flat right-angle triangle lies on the drawer floor in each
   corner, its two legs against the walls. Two tabs along each leg pass through the wall
@@ -74,6 +75,7 @@ All in `config.py`, all in inches.
 | `notch_depth` | 1.25 | how far a divider's ear engages its slot, measured from the interior level |
 | `corner_rise` | 0.5 | how much higher the front corners stand than the interior level; 0 for straight tops |
 | `back_level` | 3.5 | height of the whole back edge; leave unset for raised back corners like the front |
+| `back_step_gap` | 0.5 | flat edge kept between the last row slot and the step down to the back level |
 | `corner_plateau` | 1.0 | length of full-height edge at each corner before the shoulder |
 | `corner_curve` | `ogee` | shoulder shape: `ogee` (S of two quarter circles, radius = rise/2) or `round` (one quarter circle, radius = rise, meeting the flat vertically) |
 | `finger_width` | 0.5 | target; the real width makes an odd finger count |
@@ -154,9 +156,10 @@ stock thickness get applied at that stage; the geometry here is nominal.
 5. **Stock thickness.** Nominal 1/4 in plywood is usually 0.2 to 0.23 in. The design
    scales with `thickness`, so measure before cutting.
 6. **Dropped back edge.** The back of the box sits at 3.5 in, an inch below the front
-   corners, with the side walls and column dividers stepping down to meet it. The back
-   wall's slot floors drop by the same half inch so the column dividers' back ears keep
-   the full 1.25 in of engagement.
+   corners, with the side walls and column dividers stepping down to meet it just past
+   the last row slot, so the lowered band runs about 4 in deep. The back wall's slot
+   floors drop by the same half inch so the column dividers' back ears keep the full
+   1.25 in of engagement.
 7. **Raised corners instead of waves.** An earlier version gave every panel a random
    undulating top. Because a wall's height then differed at each slot, divider ears had
    to be recessed to stay interchangeable, and the panels stopped being identical parts.

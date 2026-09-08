@@ -87,9 +87,9 @@ class Profile:
 
 class SteppedEnds:
     """A flat top edge at `level` whose ends sit at different heights: the start end
-    at `level + start_step` and the finish end at `level + end_step` over the outer
-    `plateau` of length, each joined to the flat by a circular shoulder as wide as
-    the step is tall. A positive step raises the end, a negative one lowers it, and
+    at `level + start_step` over the first `plateau` of length, the finish end at
+    `level + end_step` over the last `end_plateau` (default the same), each joined to
+    the flat by a circular shoulder as wide as the step is tall. A positive step raises the end, a negative one lowers it, and
     zero leaves that end flat. Style 'ogee' is an S of two quarter circles, level at
     both ends; 'round' is one quarter circle, level at the plateau and vertical where
     it meets the flat."""
@@ -97,12 +97,14 @@ class SteppedEnds:
     ARC_STEPS = 12
 
     def __init__(self, length: float, level: float, start_step: float, end_step: float,
-                 plateau: float, style: str = "ogee"):
+                 plateau: float, style: str = "ogee", end_plateau: float | None = None):
         if style not in ("round", "ogee"):
             raise ValueError("style must be 'round' or 'ogee'")
-        if plateau < 0 or 2 * plateau + abs(start_step) + abs(end_step) > length:
+        end_plateau = plateau if end_plateau is None else end_plateau
+        if min(plateau, end_plateau) < 0 or plateau + end_plateau + abs(start_step) + abs(end_step) > length:
             raise ValueError("stepped ends do not fit on the edge")
-        self.length, self.level, self.plateau, self.style = length, level, plateau, style
+        self.length, self.level, self.style = length, level, style
+        self.plateau, self.end_plateau = plateau, end_plateau
         self.start_step, self.end_step = start_step, end_step
 
     @property
@@ -123,7 +125,7 @@ class SteppedEnds:
 
     def __call__(self, x: float) -> float:
         for step, d in ((self.start_step, x - self.plateau),
-                        (self.end_step, self.length - x - self.plateau)):
+                        (self.end_step, self.length - x - self.end_plateau)):
             if step == 0:
                 continue
             if d <= 0:
@@ -140,7 +142,7 @@ class SteppedEnds:
         if self.start_step:
             shoulders.append((self.plateau, abs(self.start_step)))
         if self.end_step:
-            shoulders.append((self.length - self.plateau - abs(self.end_step), abs(self.end_step)))
+            shoulders.append((self.length - self.end_plateau - abs(self.end_step), abs(self.end_step)))
         for start, width in shoulders:
             for i in range(self.ARC_STEPS + 1):
                 x = start + width * i / self.ARC_STEPS

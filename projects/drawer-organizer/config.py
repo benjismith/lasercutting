@@ -24,6 +24,7 @@ CONFIG = OrganizerConfig(
     corner_plateau=1.0,
     corner_curve="ogee",
     back_level=3.5,
+    back_step_gap=0.5,
     gusset_leg=3.0,
     gusset_tabs=2,
     # Column dividers at these grid positions (left to right): three equal columns of
