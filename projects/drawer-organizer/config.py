@@ -33,5 +33,6 @@ CONFIG = OrganizerConfig(
         RowDivider(2, 3, 2),    # column 3 gets a second split further back
         RowDivider(4, 5, -2),   # column 5 split into three
         RowDivider(4, 5, 2),
+        RowDivider(3, 4, 0),    # column 4 split in half
     ],
 )

@@ -61,7 +61,7 @@ All in `config.py`, all in inches.
 | `gusset_leg` | 3.0 | leg length of the corner gussets; 0 removes them |
 | `gusset_tabs` | 2 | tabs along each gusset leg |
 | `columns` | `[-7, -4, -1, 3]` | grid indices of column dividers, 0 at the centre |
-| `rows` | five dividers | `(start boundary, end boundary, row index)` |
+| `rows` | six dividers | `(start boundary, end boundary, row index)` |
 
 Grid indices count outward from the middle: column index 0 is the drawer's centre line,
 negative is left, positive is right; row index 0 is the middle of the depth, negative
@@ -86,7 +86,7 @@ then a 4-step and a 7-step column:
 | 1 | 4.15625 | 9.6875 / 9.6875 |
 | 2 | 4.15625 | 7.203 / 12.172 |
 | 3 | 4.15625 | 7.203 / 7.203 / 4.719 |
-| 4 | 5.625 | 19.625 |
+| 4 | 5.625 | 9.6875 / 9.6875 |
 | 5 | 10.03125 | 4.719 / 9.6875 / 4.719 |
 
 The row dividers are still the demonstration set that exercises every joint type; their
@@ -99,7 +99,7 @@ lengths follow the columns automatically.
 | long wall | 2 | 29.625 x 4.5 | passthrough |
 | short wall | 2 | 20.125 x 4.5 | passthrough |
 | column divider | 4 | 20.125 x 4.5 | passthrough |
-| row dividers | 5 | 4.66 to 10.53 x 4.5 | fit on the bed |
+| row dividers | 6 | 4.66 to 10.53 x 4.5 | fit on the bed |
 | corner gusset | 4 | 3.25 x 3.25 | fit on the bed |
 
 Every part that runs the full depth of the drawer is just over the 19.5 in bed, so the
