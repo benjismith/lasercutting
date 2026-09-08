@@ -7,10 +7,13 @@ becomes a cut path, so this module stays free of Blender imports.
 """
 from __future__ import annotations
 
+import bisect
 import math
 from dataclasses import dataclass, field
+from typing import Callable
 
 EPS = 1e-7
+PROFILE_RESOLUTION = 0.125  # chord length used to sample a curved edge
 
 Point = tuple[float, float]
 Vec3 = tuple[float, float, float]
@@ -44,14 +47,50 @@ class Notch:
         return cls(center - width / 2, center + width / 2, depth)
 
 
+class Profile:
+    """A smooth height-along-x curve through control points, using cosine
+    interpolation so the curve is level at every control point. Each control point is
+    therefore a crest, a trough, or a flat anchor."""
+
+    def __init__(self, points: list[Point]):
+        pts = sorted(points)
+        if len(pts) < 2:
+            raise ValueError("a profile needs at least two control points")
+        self.xs = [p[0] for p in pts]
+        self.hs = [p[1] for p in pts]
+
+    def __call__(self, x: float) -> float:
+        if x <= self.xs[0]:
+            return self.hs[0]
+        if x >= self.xs[-1]:
+            return self.hs[-1]
+        i = bisect.bisect_right(self.xs, x) - 1
+        x0, x1, h0, h1 = self.xs[i], self.xs[i + 1], self.hs[i], self.hs[i + 1]
+        u = (x - x0) / (x1 - x0)
+        return h0 + (h1 - h0) * (1 - math.cos(math.pi * u)) / 2
+
+    @property
+    def max(self) -> float:
+        return max(self.hs)
+
+    @property
+    def min(self) -> float:
+        return min(self.hs)
+
+
 @dataclass
 class PanelOutline:
-    """A `length` x `height` rectangle with notches on any of its four edges.
+    """A `length` x `height` rectangle with notches on any of its four edges, and
+    optionally a curved top edge.
 
     Notches on the bottom edge cut upward from y=0, on the top edge downward from
     y=height, on the left edge inward from x=0, on the right edge inward from x=length.
     A notch may sit at a corner: a notch on the bottom edge starting at x=0 simply
     removes that corner, which is how finger joints and egg-crate ends are expressed.
+
+    With a `top_profile`, the top edge follows that curve instead of y=height; the
+    curve must stay at or below `height`. Top notches are still measured down from
+    `height`, so their floors sit at a fixed level however the curve wanders.
     """
 
     length: float
@@ -60,6 +99,8 @@ class PanelOutline:
     right: list[Notch] = field(default_factory=list)
     top: list[Notch] = field(default_factory=list)
     left: list[Notch] = field(default_factory=list)
+    top_profile: Callable[[float], float] | None = None
+    _points: list[Point] | None = field(default=None, repr=False, compare=False)
 
     def validate(self) -> None:
         edges = (
@@ -78,26 +119,48 @@ class PanelOutline:
                 if n.start < prev_end - EPS:
                     raise ValueError(f"{name} notches overlap at {n}")
                 prev_end = n.end
+        if self.top_profile is not None:
+            f = self.top_profile
+            for x in (0.0, self.length):
+                if f(x) > self.height + EPS:
+                    raise ValueError(f"top profile rises above the panel height at x={x}")
+            for n in self.top:
+                floor = self.height - n.depth
+                if min(f(n.start), f(n.end)) <= floor + EPS:
+                    raise ValueError(f"top notch {n} is not below the curved edge")
 
     def points(self) -> list[Point]:
         """The outline as a simple polygon, counter-clockwise, starting near the
         bottom-left corner. Notched corners are handled by walking each edge with
-        its notches and then removing the spikes and duplicates that leaves."""
-        self.validate()
-        L, H = self.length, self.height
-        pts: list[Point] = [(0.0, 0.0)]
-        for n in sorted(self.bottom, key=lambda n: n.start):
-            pts += [(n.start, 0.0), (n.start, n.depth), (n.end, n.depth), (n.end, 0.0)]
-        pts.append((L, 0.0))
-        for n in sorted(self.right, key=lambda n: n.start):
-            pts += [(L, n.start), (L - n.depth, n.start), (L - n.depth, n.end), (L, n.end)]
-        pts.append((L, H))
-        for n in sorted(self.top, key=lambda n: n.start, reverse=True):
-            pts += [(n.end, H), (n.end, H - n.depth), (n.start, H - n.depth), (n.start, H)]
-        pts.append((0.0, H))
-        for n in sorted(self.left, key=lambda n: n.start, reverse=True):
-            pts += [(0.0, n.end), (n.depth, n.end), (n.depth, n.start), (0.0, n.start)]
-        return simplify(pts)
+        its notches and then removing the spikes and duplicates that leaves. The
+        result is cached; do not modify the outline after calling this."""
+        if self._points is None:
+            self.validate()
+            L, H = self.length, self.height
+            f = self.top_profile or (lambda _x: H)
+            pts: list[Point] = [(0.0, 0.0)]
+            for n in sorted(self.bottom, key=lambda n: n.start):
+                pts += [(n.start, 0.0), (n.start, n.depth), (n.end, n.depth), (n.end, 0.0)]
+            pts.append((L, 0.0))
+            for n in sorted(self.right, key=lambda n: n.start):
+                pts += [(L, n.start), (L - n.depth, n.start), (L - n.depth, n.end), (L, n.end)]
+            x = L
+            for n in sorted(self.top, key=lambda n: n.start, reverse=True):
+                pts += self._top_run(f, n.end, x)
+                pts += [(n.end, H - n.depth), (n.start, H - n.depth)]
+                x = n.start
+            pts += self._top_run(f, 0.0, x)
+            for n in sorted(self.left, key=lambda n: n.start, reverse=True):
+                pts += [(0.0, n.end), (n.depth, n.end), (n.depth, n.start), (0.0, n.start)]
+            self._points = simplify(pts)
+        return list(self._points)
+
+    def _top_run(self, f: Callable[[float], float], lo: float, hi: float) -> list[Point]:
+        """Points along the top edge from x=hi down to x=lo, following the curve."""
+        if self.top_profile is None:
+            return [(hi, self.height), (lo, self.height)]
+        n = max(1, math.ceil((hi - lo) / PROFILE_RESOLUTION))
+        return [(x, f(x)) for x in (hi - i * (hi - lo) / n for i in range(n + 1))]
 
     def area(self) -> float:
         return polygon_area(self.points())

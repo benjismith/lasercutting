@@ -20,6 +20,9 @@ CONFIG = OrganizerConfig(
     column_pitch=1.5,
     row_pitch=2.5,
     notch_depth=1.25,
+    wave_swing=0.5,
+    wave_length=10.0,
+    wave_seed=1,
     gusset_leg=3.0,
     gusset_tabs=2,
     # Column dividers at these grid positions (left to right): three equal columns of

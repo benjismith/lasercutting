@@ -53,13 +53,15 @@ def panel_object(panel: Panel, col: bpy.types.Collection,
     bm = bmesh.new()
     lower = [bm.verts.new(Vector(place.to_world(x, y, 0.0)) + Vector(offset)) for x, y in pts]
     upper = [bm.verts.new(Vector(place.to_world(x, y, panel.thickness)) + Vector(offset)) for x, y in pts]
-    bm.faces.new(lower)
-    bm.faces.new(upper)
+    caps = [bm.faces.new(lower), bm.faces.new(upper)]
     n = len(pts)
     for i in range(n):
         j = (i + 1) % n
         bm.faces.new((lower[i], lower[j], upper[j], upper[i]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    # Blender's default n-gon fill mis-tessellates long concave outlines (curved
+    # tops with many vertices); ear clipping handles them correctly.
+    bmesh.ops.triangulate(bm, faces=caps, quad_method="BEAUTY", ngon_method="EAR_CLIP")
     mesh = bpy.data.meshes.new(panel.name)
     bm.to_mesh(mesh)
     bm.free()

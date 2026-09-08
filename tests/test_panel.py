@@ -96,3 +96,50 @@ def test_bed_fit():
     assert bed_fit(5.5, 29.625) == "passthrough"
     assert bed_fit(20.125, 5.5) == "passthrough"
     assert bed_fit(20, 20) == "too wide"
+
+
+def test_profile_is_level_at_control_points_and_smooth_between():
+    from lasercut.panel import Profile
+    f = Profile([(0, 4.5), (5, 4.0), (10, 4.5)])
+    assert f(0) == 4.5 and f(5) == 4.0 and f(10) == 4.5
+    assert f(2.5) == pytest.approx(4.25)
+    assert f(-1) == 4.5 and f(11) == 4.5
+    # nearly flat right next to a control point
+    assert abs(f(0.25) - 4.5) < 0.005
+    assert f.max == 4.5 and f.min == 4.0
+
+
+def test_curved_top_with_notch():
+    from lasercut.panel import Profile
+    f = Profile([(0, 4.5), (5, 4.0), (10, 4.5)])
+    p = PanelOutline(10, 4.5, top=[Notch(4.875, 5.125, 1.75)], top_profile=f)
+    pts = p.points()
+    top = [pt for pt in pts if pt[1] > 3.0]
+    assert max(y for _, y in top) == pytest.approx(4.5)
+    assert min(y for _, y in top) == pytest.approx(4.0, abs=0.01)
+    assert (5.125, 2.75) in pts and (4.875, 2.75) in pts   # slot floor at height - depth
+    assert 0 < p.area() < 45
+    assert p.contains(5.0, 2.5) and not p.contains(5.0, 3.0) and not p.contains(5.0, 4.4)
+    assert p.contains(2.5, 4.2) and not p.contains(2.5, 4.45)
+
+
+def test_curved_top_rejects_bad_profiles():
+    from lasercut.panel import Profile
+    with pytest.raises(ValueError):
+        PanelOutline(10, 4.5, top_profile=Profile([(0, 5.0), (10, 5.0)])).points()
+    with pytest.raises(ValueError):
+        PanelOutline(10, 4.5, top=[Notch(4, 6, 0.25)],
+                     top_profile=Profile([(0, 4.5), (5, 4.0), (10, 4.5)])).points()
+
+
+def test_undulation_hits_anchors_and_stays_in_range():
+    import random
+    from lasercut.wave import undulation
+    f = undulation(20.0, [8.0], 4.0, 0.5, 10.0, +1, random.Random("t"))
+    for x in (0.0, 8.0, 20.0):
+        assert f(x) == 4.0
+    samples = [f(x / 10) for x in range(201)]
+    assert 4.0 <= min(samples) and max(samples) <= 4.5
+    assert max(samples) > 4.3
+    g = undulation(20.0, [], 4.5, 0.5, 10.0, -1, random.Random("u"))
+    assert g(0) == 4.5 and g(20) == 4.5 and min(g(x / 10) for x in range(201)) < 4.2

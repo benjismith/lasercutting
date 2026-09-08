@@ -28,8 +28,40 @@ def test_pitch_snaps_so_wall_cells_match_divider_cells(design):
 
 
 def test_egg_crate_notches_are_complementary(design):
-    assert design.top_notch_depth == 1.25
+    assert design.ear_top == 4.0 and design.slot_floor == 2.75
+    assert design.top_notch_depth == 1.75
     assert design.top_notch_depth + design.bottom_notch_depth == design.height
+
+
+def test_wavy_tops_follow_the_joint_rule(design):
+    H, low, t = design.height, design.ear_top, 0.25
+    by_kind = {}
+    for p in design.panels:
+        by_kind.setdefault(p.kind, []).append(p)
+    for w in by_kind["wall"]:
+        f = w.outline.top_profile
+        assert f(0) == H and f(w.outline.length) == H            # corners full height
+        assert low <= min(f(x / 8) for x in range(int(w.outline.length * 8))) <= H
+        for n in w.outline.top:                                   # ears never stand proud
+            assert f((n.start + n.end) / 2) >= low - 1e-9
+    for c in by_kind["column"]:
+        f = c.outline.top_profile
+        assert f(0) == low and f(c.outline.length) == low         # ends dip to the ear level
+        assert max(f(x / 8) for x in range(int(c.outline.length * 8))) > low + 0.3
+    for r in by_kind["row"]:
+        f = r.outline.top_profile
+        assert f(0) == low and f(r.outline.length) == low         # ends dip to the ear level
+        for n in r.outline.bottom[1:-1]:                          # and so does every crossing
+            assert f((n.start + n.end) / 2) == pytest.approx(low, abs=1e-9)
+    # no two column dividers share a shape
+    shapes = {tuple(c.outline.points()) for c in by_kind["column"]}
+    assert len(shapes) == len(by_kind["column"])
+
+
+def test_straight_tops_when_swing_is_zero():
+    d = Design(OrganizerConfig(height=4.5, wave_swing=0, notch_depth=1.25))
+    assert all(p.outline.top_profile is None for p in d.panels if p.kind != "gusset")
+    assert d.slot_floor == 3.25
 
 
 def test_panel_sizes(design):
@@ -47,7 +79,7 @@ def test_panel_sizes(design):
 
 
 def test_cut_list_needs_passthrough_for_walls(design):
-    fits = {label: fit for label, _, _, _, fit in design.cut_list()}
+    fits = {label: fit for label, _, _, _, _, fit in design.cut_list()}
     assert fits["wall"] == "passthrough"
     assert fits["column divider"] == "passthrough"
     assert fits["row divider"] == "fits bed"
