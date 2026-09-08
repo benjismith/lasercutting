@@ -41,8 +41,9 @@ can change later.
   with the same joint. A row divider can span several columns; it then crosses the
   column dividers in between with a bottom notch at each crossing.
 - **Raised front corners, dropped back edge.** The front wall stands at full height
-  over the outer inch at both ends, then drops half an inch through an S-shaped
-  shoulder to the interior level, and runs flat at that level. The S is two quarter
+  from each corner to half an inch before the first slot, then drops half an inch
+  through an S-shaped shoulder to the interior level, and runs flat at that level
+  across the slotted region. The side walls do the same at their front ends. The S is two quarter
   circles of quarter-inch radius, convex then concave, so it leaves one level and
   arrives on the other smoothly. The back edge of the whole box sits half an inch
   below the interior level: the back wall is flat at that height for its full
@@ -75,8 +76,7 @@ All in `config.py`, all in inches.
 | `notch_depth` | 1.25 | how far a divider's ear engages its slot, measured from the interior level |
 | `corner_rise` | 0.5 | how much higher the front corners stand than the interior level; 0 for straight tops |
 | `back_level` | 3.5 | height of the whole back edge; leave unset for raised back corners like the front |
-| `back_step_gap` | 0.5 | flat edge kept between the last row slot and the step down to the back level |
-| `corner_plateau` | 1.0 | length of full-height edge at each corner before the shoulder |
+| `step_gap` | 0.5 | flat edge kept between any step and the nearest slot; the raised and lowered bands run from the corners to there |
 | `corner_curve` | `ogee` | shoulder shape: `ogee` (S of two quarter circles, radius = rise/2) or `round` (one quarter circle, radius = rise, meeting the flat vertically) |
 | `finger_width` | 0.5 | target; the real width makes an odd finger count |
 | `edge_margin` | 0.5 | solid wood kept between the outermost notch and a corner joint |
@@ -155,9 +155,12 @@ stock thickness get applied at that stage; the geometry here is nominal.
    side. The box is glued, so they earn their keep.
 5. **Stock thickness.** Nominal 1/4 in plywood is usually 0.2 to 0.23 in. The design
    scales with `thickness`, so measure before cutting.
-6. **Dropped back edge.** The back of the box sits at 3.5 in, an inch below the front
-   corners, with the side walls and column dividers stepping down to meet it just past
-   the last row slot, so the lowered band runs about 4 in deep. The back wall's slot
+6. **Bands set by the slots.** The raised front bands and the lowered back band each
+   run from the corner to a step that finishes half an inch short of the nearest slot,
+   so the flat interior level spans exactly the slotted region. On the front wall the
+   raised bands are about 3.4 in long, on the side walls about 4 in, and the lowered
+   back band about 4 in. The back of the box sits at 3.5 in, an inch below the front
+   corners. The back wall's slot
    floors drop by the same half inch so the column dividers' back ears keep the full
    1.25 in of engagement.
 7. **Raised corners instead of waves.** An earlier version gave every panel a random

@@ -12,11 +12,12 @@ column dividers in between with the same joint.
 Four flat triangular gussets lie on the drawer floor in the box's corners, tabbed
 through the bottom edges of both walls they touch, to keep the glued box square.
 
-Tops: the front corners stand at full height over the outer inch, drop by an S-shaped
-shoulder to the interior level, and the walls run flat at that level. The back edge of
-the whole box sits lower: the back wall is flat at `back_level`, and the side walls
-and column dividers step down to it through the same shoulder inverted, just past
-the last row slot, so everything behind the last row position is at the back level. Dividers are otherwise flat at the interior level, so every ear is flush
+Tops: the front corners stand at full height from the corner to just before the first
+slot, drop by an S-shaped shoulder to the interior level, and the walls run flat at
+that level across the slotted region. The back edge of the whole box sits lower: the
+back wall is flat at `back_level`, and the side walls and column dividers step down to
+it through the same shoulder inverted, just past the last row slot, so everything
+behind the last row position is at the back level. Dividers are otherwise flat at the interior level, so every ear is flush
 with the edge it passes through. Slot floors sit a fixed engagement below the local
 top, so the back wall's slots are lower than the rest.
 
@@ -59,8 +60,7 @@ class OrganizerConfig:
     notch_depth: float | None = None  # how far a divider's ear engages a slot; default half the interior level
     corner_rise: float = 0.5        # how much higher the front corners stand than the interior level
     back_level: float | None = None  # height of the whole back edge; None for raised back corners like the front
-    back_step_gap: float = 0.5      # flat edge kept between the last row slot and the step down to the back level
-    corner_plateau: float = 1.0     # length of full-height edge at each corner before the shoulder
+    step_gap: float = 0.5           # flat edge kept between a step and the nearest slot
     corner_curve: str = "ogee"      # shoulder shape: 'ogee' (S of two quarter circles) or 'round' (one quarter circle)
     finger_width: float = 0.5       # target finger width at the corners
     edge_margin: float = 0.5        # solid material kept between a grid notch and a corner joint
@@ -123,21 +123,26 @@ class Design:
         self.divider_slot_depth = self.level - self.slot_floor
         self.bottom_notch_depth = self.slot_floor            # a divider's bottom notch reaches this high
         self.back_bottom_notch_depth = self.back_slot_floor  # at a column divider's back end
-        # Slots must miss the gussets and sit past the corner shoulder (which is
-        # measured from the wall's end, so take off the neighbouring wall's thickness).
+        # Slots must miss the gussets and leave room for a step plus its gap between
+        # the corner joint and the first slot.
         shoulder = max(cfg.corner_rise, abs(self.back_step))
-        clear = max(cfg.edge_margin, cfg.gusset_leg,
-                    cfg.corner_plateau + shoulder + cfg.edge_margin - t)
+        clear = max(cfg.edge_margin, cfg.gusset_leg, shoulder + cfg.step_gap)
         self.column_pitch = snap_pitch(self.width, cfg.column_pitch, t)
         self.row_pitch = snap_pitch(self.depth, cfg.row_pitch, t)
         self.column_grid = grid(self.width, self.column_pitch, t, clear)
         self.row_grid = grid(self.depth, self.row_pitch, t, clear)
         self.gusset_tab_spans = even_tab_spans(cfg.gusset_leg, cfg.gusset_tabs) if cfg.gusset_leg > 0 else []
-        # Length of the lowered band at the back of the side walls and column dividers:
-        # from just past the last row slot to the back of the box.
-        last_slot_end = max(self.row_grid.values()) + t / 2 if self.row_grid else 0.0
-        self.back_plateau = (self.depth - (last_slot_end + cfg.back_step_gap + abs(self.back_step))
-                             if cfg.back_level is not None else cfg.corner_plateau)
+        # Plateau lengths: each raised or lowered band runs from the wall's end to a
+        # step that finishes `step_gap` short of the nearest slot.
+        gap, rise = cfg.step_gap, cfg.corner_rise
+        col_first = min(self.column_grid.values()) - t / 2
+        col_last = max(self.column_grid.values()) + t / 2
+        row_first = min(self.row_grid.values()) - t / 2
+        row_last = max(self.row_grid.values()) + t / 2
+        self.front_wall_plateau = (col_first - gap - rise, self.width - col_last - gap - rise)
+        self.side_front_plateau = row_first - gap - rise
+        back_step = abs(self.back_step) if cfg.back_level is not None else rise
+        self.back_plateau = self.depth - row_last - gap - back_step
         self.finger_count = odd_finger_count(cfg.height, cfg.finger_width)
         self._validate()
         self.panels = self._build_panels()
@@ -165,20 +170,15 @@ class Design:
         cfg = self.cfg
         if not (0 <= cfg.corner_rise < self.height):
             raise ValueError("corner_rise must be between 0 and the wall height")
-        if cfg.corner_plateau < cfg.thickness:
-            raise ValueError("corner_plateau must cover at least the corner joint (one thickness)")
         if not (0 < self.slot_floor < self.level):
             raise ValueError("notch_depth must leave some wall below the slots")
         if cfg.back_level is not None and not (0 < self.back_slot_floor < self.back_level <= self.height):
             raise ValueError("back_level must be between the slot engagement and the wall height")
-        if cfg.back_level is not None and self.back_plateau < cfg.thickness:
-            raise ValueError("the step down to the back level would run into the back corner joint")
+        for plateau in (*self.front_wall_plateau, self.side_front_plateau, self.back_plateau):
+            if plateau < cfg.thickness:
+                raise ValueError("a step would run into a corner joint; increase edge_margin or reduce step_gap")
         if not self.column_grid or not self.row_grid:
             raise ValueError("grid pitch leaves no room for any notch")
-        shoulder_end = cfg.corner_plateau + max(cfg.corner_rise, abs(self.back_step))
-        for g, name in ((self.column_grid, "column"), (self.row_grid, "row")):
-            if min(g.values()) - cfg.thickness / 2 <= shoulder_end:
-                raise ValueError(f"the corner shoulder runs into the first {name} slot")
         if cfg.gusset_leg < 0 or (cfg.gusset_leg > 0 and cfg.gusset_tabs < 1):
             raise ValueError("gusset_leg must be 0 or positive with at least one tab")
         if cfg.gusset_leg > 0 and 2 * cfg.thickness + 2 * cfg.gusset_leg > min(self.width, self.depth):
@@ -207,24 +207,24 @@ class Design:
     # --- panels -------------------------------------------------------------
 
     def _top(self, length: float, start_step: float, end_step: float,
-             end_plateau: float | None = None) -> SteppedEnds | None:
-        """Top-edge profile with the given steps at each end, or None if both are zero."""
-        cfg = self.cfg
+             start_plateau: float, end_plateau: float) -> SteppedEnds | None:
+        """Top-edge profile with the given steps and plateaus, or None if both steps are zero."""
         if start_step == 0 and end_step == 0:
             return None
-        return SteppedEnds(length, self.level, start_step, end_step, cfg.corner_plateau,
-                           cfg.corner_curve, end_plateau=end_plateau)
+        return SteppedEnds(length, self.level, start_step, end_step, start_plateau,
+                           self.cfg.corner_curve, end_plateau=end_plateau)
 
     def _front_wall_top(self, length: float) -> SteppedEnds | None:
-        return self._top(length, self.cfg.corner_rise, self.cfg.corner_rise)
+        rise = self.cfg.corner_rise
+        return self._top(length, rise, rise, *self.front_wall_plateau)
 
     def _side_wall_top(self, length: float) -> SteppedEnds | None:
-        if self.cfg.back_level is None:
-            return self._top(length, self.cfg.corner_rise, self.cfg.corner_rise)
-        return self._top(length, self.cfg.corner_rise, self.back_step, end_plateau=self.back_plateau)
+        rise = self.cfg.corner_rise
+        back = rise if self.cfg.back_level is None else self.back_step
+        return self._top(length, rise, back, self.side_front_plateau, self.back_plateau)
 
     def _column_top(self, length: float) -> SteppedEnds | None:
-        return self._top(length, 0.0, self.back_step, end_plateau=self.back_plateau)
+        return self._top(length, 0.0, self.back_step, 0.0, self.back_plateau)
 
     def _build_panels(self) -> list[Panel]:
         cfg = self.cfg
@@ -329,10 +329,11 @@ class Design:
             f"a cell n steps wide is {fmt(self.column_pitch)}n - {fmt(cfg.thickness)}",
             f"Row grid:    {len(self.row_grid)} positions at {fmt(self.row_pitch)} in pitch "
             f"(y = {fmt(min(self.row_grid.values()))} .. {fmt(max(self.row_grid.values()))})",
-            f"Tops: interior level {fmt(self.level)} in; front corners {fmt(cfg.corner_rise)} in higher over the outer "
-            f"{fmt(cfg.corner_plateau)} in with a {cfg.corner_curve} shoulder"
+            f"Tops: interior level {fmt(self.level)} in; front corners {fmt(cfg.corner_rise)} in higher, "
+            f"stepping down ({cfg.corner_curve}) {fmt(cfg.step_gap)} in before the first slot "
+            f"(raised bands {fmt(self.front_wall_plateau[0])} in on the front wall, {fmt(self.side_front_plateau)} in on the sides)"
             + (f"; back edge at {fmt(self.back_level)} in over the last {fmt(self.back_plateau)} in, "
-               f"stepping down {fmt(cfg.back_step_gap)} in past the last row slot"
+               f"stepping down {fmt(cfg.step_gap)} in past the last row slot"
                if cfg.back_level is not None else "; back corners like the front"),
             f"Egg-crate slots: {fmt(self.engagement)} in of ear engagement everywhere; floors at "
             f"{fmt(self.slot_floor)} in (back wall {fmt(self.back_slot_floor)} in) above the drawer bottom",

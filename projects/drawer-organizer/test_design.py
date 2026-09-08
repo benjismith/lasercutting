@@ -42,12 +42,16 @@ def test_tops_front_corners_flat_interior_dropped_back(design):
     walls = {p.name: p for p in design.panels if p.kind == "wall"}
     W, D = design.width, design.depth
     f = walls["wall_front"].outline.top_profile
-    for x in (0.0, 0.5, 1.0, W - 1.0, W - 0.5, W):
-        assert f(x) == H                                       # front corners full height
-    assert f(1.25) == pytest.approx(level + 0.25)              # middle of the S
-    assert f(1.1) > H - 0.05 and f(1.4) < level + 0.05         # eases out of both levels
-    for x in (2.0, W / 2, W - 2.0):
-        assert f(x) == level
+    col_first = min(design.column_grid.values()) - 0.125
+    plateau = col_first - 0.5 - 0.5                            # step finishes one gap before the first slot
+    assert design.front_wall_plateau == (pytest.approx(plateau), pytest.approx(plateau))
+    assert plateau > 2.0
+    for x in (0.0, 1.0, plateau, W - plateau, W - 1.0, W):
+        assert f(x) == H                                       # raised bands full height
+    assert f(plateau + 0.25) == pytest.approx(level + 0.25)    # middle of the S
+    assert f(plateau + 0.1) > H - 0.05 and f(plateau + 0.4) < level + 0.05
+    for x in (col_first - 0.5, col_first, W / 2, W - col_first):
+        assert f(x) == pytest.approx(level)                    # flat across the slotted region
     b = walls["wall_back"].outline.top_profile
     for x in (0.0, 1.0, W / 2, W - 1.0, W):
         assert b(x) == back                                    # back wall flat at the back level
@@ -55,10 +59,14 @@ def test_tops_front_corners_flat_interior_dropped_back(design):
     step_start = last_slot_end + 0.5                           # the step begins one gap past the last slot
     assert design.back_plateau == pytest.approx(D - step_start - 0.5)
     assert design.back_plateau > 3.5                           # the lowered band is most of the back quarter
+    row_first = min(design.row_grid.values()) - 0.125
+    front_plateau = row_first - 0.5 - 0.5
+    assert design.side_front_plateau == pytest.approx(front_plateau)
     for name in ("wall_left", "wall_right"):
         g = walls[name].outline.top_profile
-        assert g(0) == H and g(1.0) == H                       # front end raised
-        assert g(2.0) == level and g(D / 2) == level           # flat interior
+        assert g(0) == H and g(front_plateau) == H             # front band raised up to the step
+        assert g(front_plateau + 0.25) == pytest.approx(level + 0.25)
+        assert g(row_first - 0.5) == pytest.approx(level) and g(D / 2) == level   # flat interior
         assert g(last_slot_end) == level and g(step_start) == pytest.approx(level)
         assert g(step_start + 0.25) == pytest.approx(level - 0.25)   # inverted S, middle
         assert g(step_start + 0.1) > level - 0.05 and g(step_start + 0.4) < back + 0.05
@@ -118,11 +126,14 @@ def test_symmetric_box_when_back_level_is_none():
     assert by_name["column_1"].outline.top_profile is None
 
 
-def test_first_slot_clears_the_shoulder_for_any_plateau():
-    for plateau in (0.25, 1.0, 2.5, 4.0):
-        d = Design(OrganizerConfig(corner_plateau=plateau, gusset_leg=0, back_level=3.5))
-        for g in (d.column_grid, d.row_grid):
-            assert min(g.values()) - 0.125 > plateau + 0.5
+def test_steps_finish_one_gap_before_the_slots_for_any_gap():
+    for gap in (0.25, 0.5, 1.5):
+        d = Design(OrganizerConfig(step_gap=gap, gusset_leg=0, back_level=3.5, columns=[0]))
+        t = 0.125
+        assert d.front_wall_plateau[0] + 0.5 + gap == pytest.approx(min(d.column_grid.values()) - t)
+        assert d.side_front_plateau + 0.5 + gap == pytest.approx(min(d.row_grid.values()) - t)
+        assert d.depth - d.back_plateau - 0.5 - gap == pytest.approx(max(d.row_grid.values()) + t)
+        assert min(d.front_wall_plateau[0], d.side_front_plateau, d.back_plateau) >= 0.25
 
 
 def test_panel_sizes(design):
@@ -173,9 +184,10 @@ def test_gussets(design):
 def test_no_gussets_when_leg_is_zero():
     d = Design(OrganizerConfig(gusset_leg=0))
     assert not any(p.kind == "gusset" for p in d.panels)
-    assert len(d.column_grid) == 17   # the corner shoulders, not the gussets, now set the clearance
+    assert len(d.column_grid) == 19
     first = min(d.column_grid.values()) - 0.125
-    assert first >= 1.0 + 0.5 + 0.5    # plateau + shoulder + edge margin
+    assert first >= 0.25 + 0.5 + 0.5   # room for a corner joint, a step and a gap before the first slot
+    assert d.front_wall_plateau[0] >= 0.25
 
 
 def test_cells_add_up(design):
