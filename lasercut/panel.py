@@ -103,19 +103,69 @@ class PanelOutline:
         return polygon_area(self.points())
 
     def contains(self, x: float, y: float) -> bool:
-        """Even-odd point-in-polygon test in panel coordinates."""
-        inside = False
-        pts = self.points()
-        j = len(pts) - 1
-        for i in range(len(pts)):
-            xi, yi = pts[i]
-            xj, yj = pts[j]
-            if (yi > y) != (yj > y):
-                x_cross = xi + (y - yi) * (xj - xi) / (yj - yi)
-                if x < x_cross:
-                    inside = not inside
-            j = i
-        return inside
+        return point_in_polygon(self.points(), x, y)
+
+    def size(self) -> tuple[float, float]:
+        return (self.length, self.height)
+
+
+class PolygonOutline:
+    """Any simple polygon, given directly as counter-clockwise points. For panels that
+    are not notched rectangles, such as a triangular corner gusset."""
+
+    def __init__(self, points: list[Point]):
+        self._points = simplify(points)
+        if polygon_area(self._points) <= 0:
+            raise ValueError("polygon points must run counter-clockwise")
+
+    def points(self) -> list[Point]:
+        return list(self._points)
+
+    def area(self) -> float:
+        return polygon_area(self._points)
+
+    def contains(self, x: float, y: float) -> bool:
+        return point_in_polygon(self._points, x, y)
+
+    def size(self) -> tuple[float, float]:
+        xs = [p[0] for p in self._points]
+        ys = [p[1] for p in self._points]
+        return (max(xs) - min(xs), max(ys) - min(ys))
+
+
+def corner_gusset(leg: float, tab_depth: float, tabs: list[tuple[float, float]]) -> PolygonOutline:
+    """A right isosceles triangle with its legs along +x and +y from the origin, with
+    tabs sticking `tab_depth` outward from both legs over the given spans (measured
+    from the right-angle corner). The tabs pass through the walls the legs sit against."""
+    pts: list[Point] = [(0.0, 0.0)]
+    for a, b in sorted(tabs):
+        pts += [(a, 0.0), (a, -tab_depth), (b, -tab_depth), (b, 0.0)]
+    pts += [(leg, 0.0), (0.0, leg)]
+    for a, b in sorted(tabs, reverse=True):
+        pts += [(0.0, b), (-tab_depth, b), (-tab_depth, a), (0.0, a)]
+    return PolygonOutline(pts)
+
+
+def even_tab_spans(length: float, count: int) -> list[tuple[float, float]]:
+    """`count` tabs spread evenly along `length`, tabs and gaps all the same width,
+    with a gap at each end."""
+    w = length / (2 * count + 1)
+    return [((2 * i + 1) * w, (2 * i + 2) * w) for i in range(count)]
+
+
+def point_in_polygon(pts: list[Point], x: float, y: float) -> bool:
+    """Even-odd test."""
+    inside = False
+    j = len(pts) - 1
+    for i in range(len(pts)):
+        xi, yi = pts[i]
+        xj, yj = pts[j]
+        if (yi > y) != (yj > y):
+            x_cross = xi + (y - yi) * (xj - xi) / (yj - yi)
+            if x < x_cross:
+                inside = not inside
+        j = i
+    return inside
 
 
 def _cross(a: Point, b: Point, c: Point) -> float:
@@ -202,11 +252,17 @@ class Placement:
         """Standing panel whose length runs along +Y, thickness toward +X."""
         return cls(origin, (0.0, 1.0, 0.0), (0.0, 0.0, 1.0), (1.0, 0.0, 0.0))
 
+    @classmethod
+    def flat(cls, origin: Vec3, x_sign: float = 1.0, y_sign: float = 1.0) -> "Placement":
+        """Panel lying in the XY plane, thickness upward; the signs mirror its axes so
+        one part can be placed in any of four corners."""
+        return cls(origin, (x_sign, 0.0, 0.0), (0.0, y_sign, 0.0), (0.0, 0.0, 1.0))
+
 
 @dataclass
 class Panel:
     name: str
-    outline: PanelOutline
+    outline: PanelOutline | PolygonOutline
     thickness: float
     placement: Placement
     kind: str = "panel"
@@ -217,8 +273,7 @@ class Panel:
 
     def bounds(self) -> tuple[Vec3, Vec3]:
         corners = [self.placement.to_world(x, y, d)
-                   for x in (0.0, self.outline.length)
-                   for y in (0.0, self.outline.height)
+                   for x, y in self.outline.points()
                    for d in (0.0, self.thickness)]
         lo = tuple(min(c[i] for c in corners) for i in range(3))
         hi = tuple(max(c[i] for c in corners) for i in range(3))

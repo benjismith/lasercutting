@@ -8,6 +8,8 @@ any column front to back. Nothing is glued, so the layout can change later.
 
 ![Exploded, showing the joints](renders/iso-exploded.png)
 
+![Corner gusset, dropped out of its slots](renders/corner.png)
+
 ## The drawer
 
 | | inches |
@@ -31,9 +33,16 @@ any column front to back. Nothing is glued, so the layout can change later.
 - **Row dividers** run left to right and drop onto the side walls and column dividers
   with the same joint. A row divider can span several columns; it then crosses the
   column dividers in between with a bottom notch at each crossing.
+- **Corner gussets.** A flat right-angle triangle lies on the drawer floor in each
+  corner, its two legs against the walls. Two tabs along each leg pass through the wall
+  and end flush with its outer face, which sits against the drawer. The walls have
+  matching notches up from their bottom edges. Glued in, the gussets keep the box
+  square and hold it square during glue-up. Without glue they add nothing: the walls
+  can lift straight off the tabs.
 
-Assembly order: walls first, then column dividers, then row dividers. To reconfigure,
-lift the row dividers out and move things around.
+Assembly order: glue the walls and gussets together (the gussets set the corners
+square), then drop in column dividers, then row dividers. To reconfigure, lift the row
+dividers out and move things around.
 
 ## Parameters
 
@@ -49,12 +58,15 @@ All in `config.py`, all in inches.
 | `notch_depth` | 1.25 | depth of the top-edge notches; dividers' bottom notches get the rest (3.25) |
 | `finger_width` | 0.5 | target; the real width makes an odd finger count |
 | `edge_margin` | 0.5 | solid wood kept between the outermost notch and a corner joint |
+| `gusset_leg` | 3.0 | leg length of the corner gussets; 0 removes them |
+| `gusset_tabs` | 2 | tabs along each gusset leg |
 | `columns` | `[-6, -3, 0, 4]` | grid indices of column dividers, 0 at the centre |
 | `rows` | five dividers | `(start boundary, end boundary, row index)` |
 
 Grid indices count outward from the middle: column index 0 is the drawer's centre line,
 negative is left, positive is right; row index 0 is the middle of the depth, negative
-toward the front. With the defaults there are 19 column positions and 7 row positions.
+toward the front. Grid positions that would run into a gusset are dropped, so with the defaults there
+are 15 column positions and 5 row positions (19 and 7 without gussets).
 
 ## Current layout
 
@@ -79,6 +91,7 @@ what belongs in the drawer.
 | short wall | 2 | 20.125 x 4.5 | passthrough |
 | column divider | 4 | 20.125 x 4.5 | passthrough |
 | row dividers | 5 | 4.75 to 9.25 x 4.5 | fit on the bed |
+| corner gusset | 4 | 3.25 x 3.25 | fit on the bed |
 
 Every part that runs the full depth of the drawer is just over the 19.5 in bed, so the
 walls and column dividers all need the passthrough. Shrinking the box to 19.5 in deep
@@ -97,9 +110,14 @@ stock thickness get applied at that stage; the geometry here is nominal.
    rock; kerf compensation at export should aim for a snug fit.
 3. **Pitch 1.5 in across, 2.5 in front to back.** Column positions stay fine-grained;
    row positions are deliberately few (7).
-4. **Stock thickness.** Nominal 1/4 in plywood is usually 0.2 to 0.23 in. The design
+4. **Corner gussets, 3 in legs.** They triangulate the corners of a box that otherwise
+   has nothing keeping it square once it leaves the drawer. The cost is a triangle of
+   floor in each corner cell and the divider positions nearest the corners, which only
+   ever made cells under 2.5 in wide. A 2 in leg keeps one more column position per
+   side. They assume the box is glued; see the note in the joint description.
+5. **Stock thickness.** Nominal 1/4 in plywood is usually 0.2 to 0.23 in. The design
    scales with `thickness`, so measure before cutting.
-5. **Grain and faces.** Plywood cuts the same either side up, and the walls' outer faces
+6. **Grain and faces.** Plywood cuts the same either side up, and the walls' outer faces
    sit against the drawer, so only the top edges and the divider faces show.
 
 ## Files

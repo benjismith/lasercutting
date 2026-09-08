@@ -16,6 +16,8 @@ CONFIG = OrganizerConfig(
     column_pitch=1.5,
     row_pitch=2.5,
     notch_depth=1.25,
+    gusset_leg=3.0,
+    gusset_tabs=2,
     # Column dividers at these grid positions (left to right).
     columns=[-6, -3, 0, 4],
     # Row dividers: (start boundary, end boundary, row index). Boundary 0 is the left

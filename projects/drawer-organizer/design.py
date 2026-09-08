@@ -9,6 +9,9 @@ along their length, so row dividers (running left to right) drop onto them and o
 the side walls the same way. A row divider may span several columns, crossing the
 column dividers in between with the same joint.
 
+Four flat triangular gussets lie on the drawer floor in the box's corners, tabbed
+through the bottom edges of both walls they touch, to keep the glued box square.
+
 Coordinates: X runs left to right across the drawer, Y front to back, Z up. The box's
 outer footprint is [0, width] x [0, depth]; the front wall is at y=0.
 """
@@ -19,7 +22,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from lasercut.glowforge import bed_fit
-from lasercut.panel import Notch, Panel, PanelOutline, Placement, finger_notches, odd_finger_count
+from lasercut.panel import (Notch, Panel, PanelOutline, Placement, corner_gusset, even_tab_spans,
+                            finger_notches, odd_finger_count)
 
 
 @dataclass(frozen=True)
@@ -47,15 +51,17 @@ class OrganizerConfig:
     notch_depth: float | None = None  # top-edge notch depth on walls and column dividers; default height/2
     finger_width: float = 0.5       # target finger width at the corners
     edge_margin: float = 0.5        # solid material kept between a grid notch and a corner joint
+    gusset_leg: float = 3.0         # leg length of the corner gussets; 0 for none
+    gusset_tabs: int = 2            # tabs along each gusset leg
     columns: list[int] = field(default_factory=list)       # column-grid indices holding a divider
     rows: list[RowDivider] = field(default_factory=list)
 
 
-def grid(length: float, pitch: float, thickness: float, margin: float) -> dict[int, float]:
+def grid(length: float, pitch: float, thickness: float, clear: float) -> dict[int, float]:
     """Notch centres along a wall of outer `length`, symmetric about its middle, every
-    `pitch`, keeping `margin` of solid wood between a notch and the corner joint."""
+    `pitch`, with nothing closer than `clear` to the inner face of the wall at either end."""
     center = length / 2
-    inner = thickness + margin + thickness / 2
+    inner = thickness + clear + thickness / 2
     k_max = int(math.floor((center - inner) / pitch + 1e-9))
     if k_max < 0:
         return {}
@@ -71,8 +77,10 @@ class Design:
         self.height = cfg.height
         self.top_notch_depth = cfg.height / 2 if cfg.notch_depth is None else cfg.notch_depth
         self.bottom_notch_depth = cfg.height - self.top_notch_depth
-        self.column_grid = grid(self.width, cfg.column_pitch, t, cfg.edge_margin)
-        self.row_grid = grid(self.depth, cfg.row_pitch, t, cfg.edge_margin)
+        clear = max(cfg.edge_margin, cfg.gusset_leg)  # dividers must miss the gussets too
+        self.column_grid = grid(self.width, cfg.column_pitch, t, clear)
+        self.row_grid = grid(self.depth, cfg.row_pitch, t, clear)
+        self.gusset_tab_spans = even_tab_spans(cfg.gusset_leg, cfg.gusset_tabs) if cfg.gusset_leg > 0 else []
         self.finger_count = odd_finger_count(cfg.height, cfg.finger_width)
         self._validate()
         self.panels = self._build_panels()
@@ -102,6 +110,10 @@ class Design:
             raise ValueError("notch_depth must be between 0 and the wall height")
         if not self.column_grid or not self.row_grid:
             raise ValueError("grid pitch leaves no room for any notch")
+        if cfg.gusset_leg < 0 or (cfg.gusset_leg > 0 and cfg.gusset_tabs < 1):
+            raise ValueError("gusset_leg must be 0 or positive with at least one tab")
+        if cfg.gusset_leg > 0 and 2 * cfg.thickness + 2 * cfg.gusset_leg > min(self.width, self.depth):
+            raise ValueError("gussets would overlap each other")
         if list(cfg.columns) != sorted(set(cfg.columns)):
             raise ValueError("columns must be strictly ascending grid indices")
         for k in cfg.columns:
@@ -134,8 +146,10 @@ class Design:
         long_fingers = finger_notches(H, t, self.finger_count, notch_first=False)
         short_fingers = finger_notches(H, t, self.finger_count, notch_first=True)
 
-        long_wall = PanelOutline(W, H, left=long_fingers, right=long_fingers, top=column_notches)
-        short_wall = PanelOutline(D, H, left=short_fingers, right=short_fingers, top=row_notches)
+        long_wall = PanelOutline(W, H, left=long_fingers, right=long_fingers, top=column_notches,
+                                 bottom=self._gusset_notches(W))
+        short_wall = PanelOutline(D, H, left=short_fingers, right=short_fingers, top=row_notches,
+                                  bottom=self._gusset_notches(D))
         panels = [
             Panel("wall_front", long_wall, t, Placement.upright_along_x((0.0, 0.0, 0.0)), "wall"),
             Panel("wall_back", long_wall, t, Placement.upright_along_x((0.0, D - t, 0.0)), "wall"),
@@ -156,7 +170,28 @@ class Design:
                        for a, b in (self.boundary_faces(j) for j in range(r.start, r.end + 1))]
             outline = PanelOutline(x1 - x0, H, bottom=notches)
             panels.append(Panel(f"row_{i}", outline, t, Placement.upright_along_x((x0, y - t / 2, 0.0)), "row"))
+
+        if cfg.gusset_leg > 0:
+            gusset = corner_gusset(cfg.gusset_leg, t, self.gusset_tab_spans)
+            corners = {
+                "gusset_front_left": ((t, t, 0.0), 1.0, 1.0),
+                "gusset_front_right": ((W - t, t, 0.0), -1.0, 1.0),
+                "gusset_back_left": ((t, D - t, 0.0), 1.0, -1.0),
+                "gusset_back_right": ((W - t, D - t, 0.0), -1.0, -1.0),
+            }
+            for name, (origin, sx, sy) in corners.items():
+                panels.append(Panel(name, gusset, t, Placement.flat(origin, sx, sy), "gusset"))
         return panels
+
+    def _gusset_notches(self, wall_length: float) -> list[Notch]:
+        """Bottom-edge notches at both ends of a wall for the gusset tabs. Spans are
+        measured from the wall's inner corner, so add the neighbouring wall's thickness."""
+        t = self.cfg.thickness
+        notches = []
+        for a, b in self.gusset_tab_spans:
+            notches.append(Notch(t + a, t + b, t))
+            notches.append(Notch(wall_length - t - b, wall_length - t - a, t))
+        return notches
 
     # --- reporting ----------------------------------------------------------
 
@@ -176,9 +211,10 @@ class Design:
     def cut_list(self) -> list[tuple[str, float, float, int, str]]:
         """(label, length, height, count, bed fit), identical panels grouped."""
         groups: dict[tuple[str, float, float], int] = {}
+        labels = {"wall": "wall", "column": "column divider", "row": "row divider", "gusset": "corner gusset"}
         for p in self.panels:
-            label = {"wall": "wall", "column": "column divider", "row": "row divider"}[p.kind]
-            key = (label, round(p.outline.length, 4), round(p.outline.height, 4))
+            w, h = p.outline.size()
+            key = (labels[p.kind], round(w, 4), round(h, 4))
             groups[key] = groups.get(key, 0) + 1
         return [(label, L, H, n, bed_fit(L, H)) for (label, L, H), n in groups.items()]
 
@@ -195,6 +231,8 @@ class Design:
             f"Egg-crate notches: {fmt(self.top_notch_depth)} in down from wall tops, "
             f"{fmt(self.bottom_notch_depth)} in up from divider bottoms",
             f"Corner joints: {self.finger_count} fingers of {fmt(self.height / self.finger_count)} in",
+            (f"Corner gussets: {fmt(cfg.gusset_leg)} in legs, {cfg.gusset_tabs} tabs per leg"
+             if cfg.gusset_leg > 0 else "Corner gussets: none"),
             "",
             "Cut list (length x height, in):",
         ]

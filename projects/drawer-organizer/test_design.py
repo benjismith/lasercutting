@@ -12,10 +12,10 @@ def design():
 def test_outer_size_and_grid(design):
     assert design.width == 29.625 and design.depth == 20.125
     xs = list(design.column_grid.values())
-    assert xs == sorted(xs) and len(xs) == 19
+    assert xs == sorted(xs) and len(xs) == 15
     assert xs[0] + xs[-1] == pytest.approx(design.width)  # symmetric about the centre
-    assert xs[0] - 0.125 >= 0.25 + 0.5                   # clear of the corner joint plus margin
-    assert len(design.row_grid) == 7
+    assert xs[0] - 0.125 >= 0.25 + 3.0                   # clear of the corner gusset
+    assert len(design.row_grid) == 5
 
 
 def test_egg_crate_notches_are_complementary(design):
@@ -40,6 +40,34 @@ def test_cut_list_needs_passthrough_for_walls(design):
     assert fits["wall"] == "passthrough"
     assert fits["column divider"] == "passthrough"
     assert fits["row divider"] == "fits bed"
+    assert fits["corner gusset"] == "fits bed"
+
+
+def test_gussets(design):
+    gussets = [p for p in design.panels if p.kind == "gusset"]
+    assert len(gussets) == 4
+    leg, t = 3.0, 0.25
+    tabs = design.gusset_tab_spans
+    assert [v for span in tabs for v in span] == pytest.approx([0.6, 1.2, 1.8, 2.4])
+    expected = leg * leg / 2 + 2 * sum((b - a) * t for a, b in tabs)
+    assert gussets[0].outline.area() == pytest.approx(expected)
+    # every wall has a pair of bottom notches at each end for the tabs
+    for p in design.panels:
+        if p.kind == "wall":
+            assert len(p.outline.bottom) == 4
+    # the front-left gusset's first tab sits inside the front wall, just past the corner
+    fl = next(p for p in gussets if p.name == "gusset_front_left")
+    assert fl.contains((t + 0.9, t / 2, t / 2))
+    assert not fl.contains((t + 0.3, t / 2, t / 2))
+    front = next(p for p in design.panels if p.name == "wall_front")
+    assert not front.contains((t + 0.9, t / 2, t / 2))
+    assert front.contains((t + 0.3, t / 2, t / 2))
+
+
+def test_no_gussets_when_leg_is_zero():
+    d = Design(OrganizerConfig(gusset_leg=0))
+    assert not any(p.kind == "gusset" for p in d.panels)
+    assert len(d.column_grid) == 19
 
 
 def test_cells_add_up(design):

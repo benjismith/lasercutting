@@ -101,6 +101,8 @@ VIEW_ROTATIONS = {
     "top": Quaternion((1.0, 0.0, 0.0, 0.0)),
     "front": Euler((math.pi / 2, 0.0, 0.0)).to_quaternion(),
     "iso": (-Vector((-0.75, -1.0, 0.8))).to_track_quat("-Z", "Y"),
+    # steep look down into the front-left corner from inside the box
+    "corner": Vector((-0.6, -0.8, -1.4)).to_track_quat("-Z", "Y"),
 }
 
 
