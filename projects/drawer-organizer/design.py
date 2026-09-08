@@ -61,7 +61,8 @@ class OrganizerConfig:
     corner_rise: float = 0.5        # how much higher the front corners stand than the interior level
     back_level: float | None = None  # height of the whole back edge; None for raised back corners like the front
     step_gap: float = 0.5           # flat edge kept between a step and the nearest slot
-    corner_curve: str = "ogee"      # shoulder shape: 'ogee' (S of two quarter circles) or 'round' (one quarter circle)
+    corner_curve: str = "ease"      # shoulder shape: 'ease' (cubic S over step_run), 'ogee' (two quarter circles) or 'round'
+    step_run: float = 2.0           # length of an 'ease' shoulder; circular shoulders are as long as the step is tall
     finger_width: float = 0.5       # target finger width at the corners
     edge_margin: float = 0.5        # solid material kept between a grid notch and a corner joint
     gusset_leg: float = 3.0         # leg length of the corner gussets; 0 for none
@@ -125,7 +126,7 @@ class Design:
         self.back_bottom_notch_depth = self.back_slot_floor  # at a column divider's back end
         # Slots must miss the gussets and leave room for a step plus its gap between
         # the corner joint and the first slot.
-        shoulder = max(cfg.corner_rise, abs(self.back_step))
+        shoulder = max(self.shoulder_width(cfg.corner_rise), self.shoulder_width(self.back_step))
         clear = max(cfg.edge_margin, cfg.gusset_leg, shoulder + cfg.step_gap)
         self.column_pitch = snap_pitch(self.width, cfg.column_pitch, t)
         self.row_pitch = snap_pitch(self.depth, cfg.row_pitch, t)
@@ -134,20 +135,27 @@ class Design:
         self.gusset_tab_spans = even_tab_spans(cfg.gusset_leg, cfg.gusset_tabs) if cfg.gusset_leg > 0 else []
         # Plateau lengths: each raised or lowered band runs from the wall's end to a
         # step that finishes `step_gap` short of the nearest slot.
-        gap, rise = cfg.step_gap, cfg.corner_rise
+        gap = cfg.step_gap
+        rise_w = self.shoulder_width(cfg.corner_rise)
         col_first = min(self.column_grid.values()) - t / 2
         col_last = max(self.column_grid.values()) + t / 2
         row_first = min(self.row_grid.values()) - t / 2
         row_last = max(self.row_grid.values()) + t / 2
-        self.front_wall_plateau = (col_first - gap - rise, self.width - col_last - gap - rise)
-        self.side_front_plateau = row_first - gap - rise
-        back_step = abs(self.back_step) if cfg.back_level is not None else rise
-        self.back_plateau = self.depth - row_last - gap - back_step
+        self.front_wall_plateau = (col_first - gap - rise_w, self.width - col_last - gap - rise_w)
+        self.side_front_plateau = row_first - gap - rise_w
+        back_w = self.shoulder_width(self.back_step) if cfg.back_level is not None else rise_w
+        self.back_plateau = self.depth - row_last - gap - back_w
         self.finger_count = odd_finger_count(cfg.height, cfg.finger_width)
         self._validate()
         self.panels = self._build_panels()
 
     # --- layout bookkeeping -------------------------------------------------
+
+    def shoulder_width(self, step: float) -> float:
+        """Horizontal length of the shoulder that makes a step of the given size."""
+        if step == 0:
+            return 0.0
+        return self.cfg.step_run if self.cfg.corner_curve == "ease" else abs(step)
 
     @property
     def column_count(self) -> int:
@@ -212,7 +220,7 @@ class Design:
         if start_step == 0 and end_step == 0:
             return None
         return SteppedEnds(length, self.level, start_step, end_step, start_plateau,
-                           self.cfg.corner_curve, end_plateau=end_plateau)
+                           self.cfg.corner_curve, end_plateau=end_plateau, run=self.cfg.step_run)
 
     def _front_wall_top(self, length: float) -> SteppedEnds | None:
         rise = self.cfg.corner_rise
@@ -330,7 +338,8 @@ class Design:
             f"Row grid:    {len(self.row_grid)} positions at {fmt(self.row_pitch)} in pitch "
             f"(y = {fmt(min(self.row_grid.values()))} .. {fmt(max(self.row_grid.values()))})",
             f"Tops: interior level {fmt(self.level)} in; front corners {fmt(cfg.corner_rise)} in higher, "
-            f"stepping down ({cfg.corner_curve}) {fmt(cfg.step_gap)} in before the first slot "
+            f"stepping down ({cfg.corner_curve}, {fmt(self.shoulder_width(cfg.corner_rise))} in long) "
+            f"{fmt(cfg.step_gap)} in before the first slot "
             f"(raised bands {fmt(self.front_wall_plateau[0])} in on the front wall, {fmt(self.side_front_plateau)} in on the sides)"
             + (f"; back edge at {fmt(self.back_level)} in over the last {fmt(self.back_plateau)} in, "
                f"stepping down {fmt(cfg.step_gap)} in past the last row slot"

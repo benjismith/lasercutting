@@ -41,16 +41,18 @@ can change later.
   with the same joint. A row divider can span several columns; it then crosses the
   column dividers in between with a bottom notch at each crossing.
 - **Raised front corners, dropped back edge.** The front wall stands at full height
-  from each corner to half an inch before the first slot, then drops half an inch
-  through an S-shaped shoulder to the interior level, and runs flat at that level
+  from each corner, then eases down half an inch over a 2 in run to the interior
+  level, finishing half an inch before the first slot, and runs flat at that level
   across the slotted region. The side walls do the same at their front ends. The S is two quarter
   circles of quarter-inch radius, convex then concave, so it leaves one level and
   arrives on the other smoothly. The back edge of the whole box sits half an inch
   below the interior level: the back wall is flat at that height for its full
-  length, and the side walls and column dividers step down to it through the same S
-  inverted, half an inch past the last row slot, so everything behind the last row
-  position sits at the back level. Row dividers are flat at the interior level.
-  Every divider ear is flush with the edge it passes through, front and back.
+  length, and the side walls and column dividers ease down to it the same way, starting
+  half an inch past the last row slot, so everything behind the last row position sits
+  at the back level. Row dividers are flat at the interior level.
+  Every divider ear is flush with the edge it passes through, front and back. The
+  shoulder is a cubic ease, level at both ends and about 21 degrees at its steepest,
+  which is also exactly one Bezier curve in a cut file.
 - **Corner gussets.** A flat right-angle triangle lies on the drawer floor in each
   corner, its two legs against the walls. Two tabs along each leg pass through the wall
   and end flush with its outer face, which sits against the drawer. The walls have
@@ -77,7 +79,8 @@ All in `config.py`, all in inches.
 | `corner_rise` | 0.5 | how much higher the front corners stand than the interior level; 0 for straight tops |
 | `back_level` | 3.5 | height of the whole back edge; leave unset for raised back corners like the front |
 | `step_gap` | 0.5 | flat edge kept between any step and the nearest slot; the raised and lowered bands run from the corners to there |
-| `corner_curve` | `ogee` | shoulder shape: `ogee` (S of two quarter circles, radius = rise/2) or `round` (one quarter circle, radius = rise, meeting the flat vertically) |
+| `corner_curve` | `ease` | shoulder shape: `ease` (cubic S over `step_run`), `ogee` (two quarter circles, vertical in the middle) or `round` (one quarter circle) |
+| `step_run` | 2.0 | length of an `ease` shoulder; circular shoulders are as long as the step is tall |
 | `finger_width` | 0.5 | target; the real width makes an odd finger count |
 | `edge_margin` | 0.5 | solid wood kept between the outermost notch and a corner joint |
 | `gusset_leg` | 3.0 | leg length of the corner gussets; 0 removes them |
@@ -156,20 +159,24 @@ stock thickness get applied at that stage; the geometry here is nominal.
 5. **Stock thickness.** Nominal 1/4 in plywood is usually 0.2 to 0.23 in. The design
    scales with `thickness`, so measure before cutting.
 6. **Bands set by the slots.** The raised front bands and the lowered back band each
-   run from the corner to a step that finishes half an inch short of the nearest slot,
-   so the flat interior level spans exactly the slotted region. On the front wall the
-   raised bands are about 3.4 in long, on the side walls about 4 in, and the lowered
-   back band about 4 in. The back of the box sits at 3.5 in, an inch below the front
-   corners. The back wall's slot
+   run from the corner to a shoulder that finishes half an inch short of the nearest
+   slot, so the flat interior level spans exactly the slotted region. With the 2 in
+   ease, the full-height plateau is about 1.9 in on the front wall and 2.5 in on the
+   side walls, and the flat part of the lowered back band about 2.5 in. The back of
+   the box sits at 3.5 in, an inch below the front corners.
+7. **Cubic ease over 2 in.** A first version used an S of two quarter circles, which
+   is vertical at its midpoint and reads as a rounded step. The cubic ease spreads the
+   half-inch change over 2 in at about 21 degrees; longer runs eat the corner plateau.
+   The circular styles remain available. The back wall's slot
    floors drop by the same half inch so the column dividers' back ears keep the full
    1.25 in of engagement.
-7. **Raised corners instead of waves.** An earlier version gave every panel a random
+8. **Raised corners instead of waves.** An earlier version gave every panel a random
    undulating top. Because a wall's height then differed at each slot, divider ears had
    to be recessed to stay interchangeable, and the panels stopped being identical parts.
    Raised corners with a flat interior keep a shaped top edge while restoring flush
    ears, uniform slots, and identical dividers. The wave generator remains in the
    shared library for other projects.
-8. **Grain and faces.** Plywood cuts the same either side up, and the walls' outer faces
+9. **Grain and faces.** Plywood cuts the same either side up, and the walls' outer faces
    sit against the drawer, so only the top edges and the divider faces show.
 
 ## Files
