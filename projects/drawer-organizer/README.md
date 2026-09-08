@@ -73,25 +73,27 @@ All in `config.py`, all in inches.
 | `clearance` | 1/16 per side | box is the drawer size minus twice this |
 | `height` | 4.5 | wall height at the raised corners |
 | `thickness` | 0.25 | **measure your actual stock with calipers** and set this |
-| `column_pitch` | 1.5 | target spacing of column-divider positions across the width; snapped, see below |
-| `row_pitch` | 2.5 | target spacing of row-divider positions along the depth; snapped |
+| `column_steps` | 18 | grid steps across the width; must be even, and a multiple of any number of equal columns you want |
+| `row_steps` | 8 | grid steps along the depth; must be even |
 | `notch_depth` | 1.25 | how far a divider's ear engages its slot, measured from the interior level |
 | `corner_rise` | 0.5 | how much higher the front corners stand than the interior level; 0 for straight tops |
 | `back_level` | 3.5 | height of the whole back edge; leave unset for raised back corners like the front |
 | `step_gap` | 0.5 | flat edge kept between any step and the nearest slot; the raised and lowered bands run from the corners to there |
+| `corner_plateau_min` | 1.5 | least full-height edge kept at a corner; slot positions that would shorten it are dropped |
 | `corner_curve` | `ease` | shoulder shape: `ease` (cubic S over `step_run`), `ogee` (two quarter circles, vertical in the middle) or `round` (one quarter circle) |
 | `step_run` | 2.0 | length of an `ease` shoulder; circular shoulders are as long as the step is tall |
 | `finger_width` | 0.5 | target; the real width makes an odd finger count |
 | `edge_margin` | 0.5 | solid wood kept between the outermost notch and a corner joint |
 | `gusset_leg` | 3.0 | leg length of the corner gussets; 0 removes them |
 | `gusset_tabs` | 2 | tabs along each gusset leg |
-| `columns` | `[-7, -4, -1, 3]` | grid indices of column dividers, 0 at the centre |
-| `rows` | six dividers | `(start boundary, end boundary, row index)` |
+| `columns` | per layout | grid indices of column dividers, 0 at the centre |
+| `rows` | per layout | `(start boundary, end boundary, row index)` |
 
 Grid indices count outward from the middle: column index 0 is the drawer's centre line,
 negative is left, positive is right; row index 0 is the middle of the depth, negative
-toward the front. Grid positions that would run into a gusset are dropped, so with the defaults there
-are 15 column positions and 5 row positions (19 and 7 without gussets).
+toward the front. Grid positions that would run into a gusset, or leave less than the minimum corner
+plateau, are dropped, so with the defaults there are 13 column positions and 5 row
+positions.
 
 **Slot depths.** The interior level is `height - corner_rise` (4.0). Slot floors sit
 `notch_depth` below the local top, so every ear engages its slot by 1.25 in: floors at
@@ -99,29 +101,35 @@ are 15 column positions and 5 row positions (19 and 7 without gussets).
 wall, whose top is lower. A column divider's bottom notches match: 2.75 in tall at the
 front, 2.25 at the back, which gives it a definite front and back.
 
-**Pitch snapping.** A cell against a wall is bounded by one wall face and one divider
-face; a cell between dividers by two divider faces. For the same number of grid steps
-those differ by half a stock thickness, unless an even number of pitches spans the wall
-length minus one thickness. So the pitch is nudged to the nearest value that does: here
-1.46875 in across (20 steps) and 2.484 in front to back (8 steps). Then any cell is
-simply steps x pitch minus thickness, wherever it sits, and columns given the same
-number of steps come out identical.
+**Grid steps.** The wall length minus one stock thickness is divided into an even
+number of equal steps: 18 across (a pitch of 1.632 in) and 8 front to back (2.484 in).
+A cell against a wall is bounded by one wall face and one divider face, a cell between
+dividers by two divider faces; with an even step count those come out the same width
+for the same number of steps, so any cell is simply steps x pitch minus thickness,
+wherever it sits. Splitting the drawer into m equal columns needs the step count to be
+a multiple of m: 18 allows 2, 3, 6 or 9 equal columns.
 
-## Current layout
+## Layouts
 
-Running `build.py` prints this. Three equal columns on the left (3 grid steps each),
-then a 4-step and a 7-step column:
+`config.py` holds the box parameters once and a set of named layouts on top of them;
+`build.py --layout NAME` builds one, and `build.py` prints the cell sizes.
+
+**three-plus-two** (the default): three equal columns of 3 steps on the left, then a
+4-step and a 5-step column.
 
 | column | clear width | cells front to back |
 |---|---|---|
-| 1 | 4.15625 | 9.6875 / 9.6875 |
-| 2 | 4.15625 | 7.203 / 12.172 |
-| 3 | 4.15625 | 7.203 / 7.203 / 4.719 |
-| 4 | 5.625 | 9.6875 / 9.6875 |
-| 5 | 10.03125 | 4.719 / 9.6875 / 4.719 |
+| 1 | 4.646 | 9.6875 / 9.6875 |
+| 2 | 4.646 | 7.203 / 12.172 |
+| 3 | 4.646 | 7.203 / 7.203 / 4.719 |
+| 4 | 6.278 | 9.6875 / 9.6875 |
+| 5 | 7.910 | 4.719 / 9.6875 / 4.719 |
 
-The row dividers are still the demonstration set that exercises every joint type; their
-lengths follow the columns automatically.
+**six-equal**: six columns of 3 steps, each 4.646 in wide, with the two outer columns
+split in half.
+
+The row dividers in both are demonstration sets; their lengths follow the columns
+automatically.
 
 ## Cutting
 
@@ -131,7 +139,7 @@ lengths follow the columns automatically.
 | back wall | 1 | 29.625 x 3.5 | passthrough |
 | side wall | 2 | 20.125 x 4.5 | passthrough |
 | column divider | 4 | 20.125 x 4.0 | passthrough |
-| row dividers | 6 | 4.66 to 10.53 x 4.0 | fit on the bed |
+| row dividers | 6 | 5.15 to 8.41 x 4.0 | fit on the bed |
 | corner gusset | 4 | 3.25 x 3.25 | fit on the bed |
 
 Every part that runs the full depth of the drawer is just over the 19.5 in bed, so the
@@ -149,8 +157,10 @@ stock thickness get applied at that stage; the geometry here is nominal.
    the dividers' 2.75 in bottom notches do the holding. The trade-off is that a divider
    is held sideways only by its 1.25 in ear in the wall slot, so a loose fit lets it
    rock; kerf compensation at export should aim for a snug fit.
-3. **Pitch about 1.5 in across, 2.5 in front to back,** snapped as described above.
-   Column positions stay fine-grained; row positions are deliberately few.
+3. **18 steps across, 8 front to back.** An earlier grid used 20 steps across, which
+   cannot split evenly into six columns; 18 supports both the three-plus-two layout and
+   six equal columns at a slightly coarser 1.63 in pitch. 24 steps would support six
+   equal columns too at a finer pitch, with more slots in the walls.
 4. **Corner gussets, 3 in legs.** They triangulate the corners of a box that otherwise
    has nothing keeping it square once it leaves the drawer. The cost is a triangle of
    floor in each corner cell and the divider positions nearest the corners, which only

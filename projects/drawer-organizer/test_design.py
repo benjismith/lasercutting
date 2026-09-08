@@ -1,6 +1,6 @@
 import pytest
 
-from config import CONFIG
+from config import CONFIG, LAYOUTS
 from design import Design, OrganizerConfig, RowDivider
 
 
@@ -12,19 +12,35 @@ def design():
 def test_outer_size_and_grid(design):
     assert design.width == 29.625 and design.depth == 20.125
     xs = list(design.column_grid.values())
-    assert xs == sorted(xs) and len(xs) == 15
+    assert xs == sorted(xs) and len(xs) == 13
     assert xs[0] + xs[-1] == pytest.approx(design.width)  # symmetric about the centre
     assert xs[0] - 0.125 >= 0.25 + 3.0                   # clear of the corner gusset
+    assert xs[0] - 0.125 >= 0.25 + 1.5 + 2.0 + 0.5       # and of the corner plateau, shoulder and gap
     assert len(design.row_grid) == 5
 
 
-def test_pitch_snaps_so_wall_cells_match_divider_cells(design):
-    assert design.column_pitch == pytest.approx((design.width - 0.25) / 20)
+def test_steps_make_wall_cells_match_divider_cells(design):
+    assert design.column_pitch == pytest.approx((design.width - 0.25) / 18)
     assert design.row_pitch == pytest.approx((design.depth - 0.25) / 8)
     widths = [w for _, w, _ in design.cells()]
-    assert widths[0] == widths[1] == widths[2] == pytest.approx(3 * design.column_pitch - 0.25)
+    for w in widths[:3]:
+        assert w == pytest.approx(3 * design.column_pitch - 0.25)
     assert widths[3] == pytest.approx(4 * design.column_pitch - 0.25)
-    assert widths[4] == pytest.approx(7 * design.column_pitch - 0.25)
+    assert widths[4] == pytest.approx(5 * design.column_pitch - 0.25)
+
+
+def test_six_equal_columns_layout():
+    d = Design(LAYOUTS["six-equal"])
+    widths = [w for _, w, _ in d.cells()]
+    assert len(widths) == 6
+    assert all(w == pytest.approx(widths[0]) for w in widths)
+    assert widths[0] == pytest.approx((d.width - 2 * 0.25 - 5 * 0.25) / 6)
+    assert d.panels[4].kind == "column" and sum(p.kind == "column" for p in d.panels) == 5
+
+
+def test_odd_step_counts_are_rejected():
+    with pytest.raises(ValueError):
+        Design(OrganizerConfig(column_steps=15))
 
 
 def test_egg_crate_notches_are_complementary(design):
@@ -149,7 +165,7 @@ def test_panel_sizes(design):
     x3 = design.column_grid[CONFIG.columns[2]] + 0.125
     assert row.outline.length == pytest.approx(x3 - x1)
     # a row divider in one of the equal columns spans the cell plus two divider faces
-    assert by_name["row_1"].outline.length == pytest.approx(4.15625 + 0.5)
+    assert by_name["row_1"].outline.length == pytest.approx(3 * design.column_pitch - 0.25 + 0.5)
 
 
 def test_cut_list_needs_passthrough_for_walls(design):
@@ -187,10 +203,12 @@ def test_no_gussets_when_leg_is_zero():
     d = Design(OrganizerConfig(gusset_leg=0))
     assert not any(p.kind == "gusset" for p in d.panels)
     w = d.shoulder_width(0.5)
-    assert len(d.column_grid) == (17 if w == 2.0 else 19)   # a longer shoulder pushes the first slot in
+    import math
+    k = math.floor((d.width / 2 - 0.25 - (1.5 + w + 0.5) - 0.125) / d.column_pitch + 1e-9)
+    assert len(d.column_grid) == 2 * k + 1
     first = min(d.column_grid.values()) - 0.125
-    assert first >= 0.25 + w + 0.5    # room for a corner joint, a shoulder and a gap before the first slot
-    assert d.front_wall_plateau[0] >= 0.25
+    assert first >= 0.25 + 1.5 + w + 0.5   # room for the corner plateau, a shoulder and a gap before the first slot
+    assert d.front_wall_plateau[0] >= 1.5
 
 
 def test_cells_add_up(design):

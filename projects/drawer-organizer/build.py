@@ -15,6 +15,7 @@ Options after the `--`:
     --views LIST     comma-separated subset of iso,top,front,corner (default iso,top,front)
     --explode IN     lift column dividers by IN inches, row dividers by twice that, and
                      drop the gussets by IN
+    --layout NAME    one of the layouts in config.LAYOUTS (default config.CONFIG)
     --size WxH       render size in pixels (default 1800x1200)
     --region X0,Y0,X1,Y1   frame the renders on this part of the floor plan only
     --hide KINDS     comma-separated panel kinds to leave out of renders (wall,column,row,gusset)
@@ -65,13 +66,15 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--views", default="iso,top,front")
     ap.add_argument("--explode", type=float, default=0.0)
     ap.add_argument("--size", default="1800x1200")
+    ap.add_argument("--layout")
     ap.add_argument("--region")
     ap.add_argument("--hide", default="")
     return ap.parse_args(argv)
 
 
-def build(explode: float = 0.0) -> tuple[design.Design, list[bpy.types.Object]]:
-    d = design.Design(config.CONFIG)
+def build(explode: float = 0.0, layout: str | None = None) -> tuple[design.Design, list[bpy.types.Object]]:
+    cfg = config.LAYOUTS[layout] if layout else config.CONFIG
+    d = design.Design(cfg)
     cols = {kind: lb.collection(label) for kind, label in LABELS.items()}
     mats = {kind: lb.material(kind, rgb) for kind, rgb in COLORS.items()}
     lift = {"wall": 0.0, "column": explode, "row": 2 * explode, "gusset": -explode}
@@ -85,7 +88,7 @@ def build(explode: float = 0.0) -> tuple[design.Design, list[bpy.types.Object]]:
 def main() -> None:
     args = parse_args()
     scene = lb.reset_scene()
-    d, objects = build(args.explode)
+    d, objects = build(args.explode, args.layout)
     print(d.describe())
 
     if args.blend:

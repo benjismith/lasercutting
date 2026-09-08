@@ -55,12 +55,13 @@ class OrganizerConfig:
     clearance: float = 1 / 16       # gap between the box and each drawer wall
     height: float = 4.5             # wall height at the raised corners
     thickness: float = 0.25         # measured stock thickness
-    column_pitch: float = 1.5       # target spacing of column-divider positions along the width
-    row_pitch: float = 2.5          # target spacing of row-divider positions along the depth
+    column_steps: int = 18          # grid steps across the width (even); equal columns need a divisor of this
+    row_steps: int = 8              # grid steps along the depth (even)
     notch_depth: float | None = None  # how far a divider's ear engages a slot; default half the interior level
     corner_rise: float = 0.5        # how much higher the front corners stand than the interior level
     back_level: float | None = None  # height of the whole back edge; None for raised back corners like the front
     step_gap: float = 0.5           # flat edge kept between a step and the nearest slot
+    corner_plateau_min: float = 1.5  # least full-height edge kept at a corner before the shoulder begins
     corner_curve: str = "ease"      # shoulder shape: 'ease' (cubic S over step_run), 'ogee' (two quarter circles) or 'round'
     step_run: float = 2.0           # length of an 'ease' shoulder; circular shoulders are as long as the step is tall
     finger_width: float = 0.5       # target finger width at the corners
@@ -71,14 +72,14 @@ class OrganizerConfig:
     rows: list[RowDivider] = field(default_factory=list)
 
 
-def snap_pitch(length: float, target_pitch: float, thickness: float) -> float:
-    """The pitch nearest `target_pitch` such that an even number of pitches spans the
-    wall's length minus one stock thickness. With that, a cell against a wall and a
-    cell between two dividers are the same width for the same number of grid steps:
-    every cell is steps * pitch - thickness."""
-    span = length - thickness
-    n = max(2, 2 * round(span / target_pitch / 2))
-    return span / n
+def step_pitch(length: float, steps: int, thickness: float) -> float:
+    """The grid pitch when the wall's length minus one stock thickness is divided into
+    `steps` equal steps. With an even count, a cell against a wall and a cell between
+    two dividers are the same width for the same number of steps: every cell is
+    steps * pitch - thickness, and m equal columns need `steps` divisible by m."""
+    if steps < 2 or steps % 2:
+        raise ValueError("grid steps must be an even number of at least 2")
+    return (length - thickness) / steps
 
 
 def grid(length: float, pitch: float, thickness: float, clear: float) -> dict[int, float]:
@@ -124,12 +125,12 @@ class Design:
         self.divider_slot_depth = self.level - self.slot_floor
         self.bottom_notch_depth = self.slot_floor            # a divider's bottom notch reaches this high
         self.back_bottom_notch_depth = self.back_slot_floor  # at a column divider's back end
-        # Slots must miss the gussets and leave room for a step plus its gap between
-        # the corner joint and the first slot.
+        # Slots must miss the gussets and leave room for the corner plateau, a
+        # shoulder and its gap between the corner joint and the first slot.
         shoulder = max(self.shoulder_width(cfg.corner_rise), self.shoulder_width(self.back_step))
-        clear = max(cfg.edge_margin, cfg.gusset_leg, shoulder + cfg.step_gap)
-        self.column_pitch = snap_pitch(self.width, cfg.column_pitch, t)
-        self.row_pitch = snap_pitch(self.depth, cfg.row_pitch, t)
+        clear = max(cfg.edge_margin, cfg.gusset_leg, cfg.corner_plateau_min + shoulder + cfg.step_gap)
+        self.column_pitch = step_pitch(self.width, cfg.column_steps, t)
+        self.row_pitch = step_pitch(self.depth, cfg.row_steps, t)
         self.column_grid = grid(self.width, self.column_pitch, t, clear)
         self.row_grid = grid(self.depth, self.row_pitch, t, clear)
         self.gusset_tab_spans = even_tab_spans(cfg.gusset_leg, cfg.gusset_tabs) if cfg.gusset_leg > 0 else []
@@ -332,11 +333,12 @@ class Design:
         lines = [
             f"Drawer organizer: outer {fmt(self.width)} x {fmt(self.depth)} x {fmt(self.height)} in, "
             f"{fmt(cfg.thickness)} in stock, {fmt(cfg.clearance)} in clearance per side",
-            f"Column grid: {len(self.column_grid)} positions at {fmt(self.column_pitch)} in pitch "
-            f"(x = {fmt(min(self.column_grid.values()))} .. {fmt(max(self.column_grid.values()))}); "
-            f"a cell n steps wide is {fmt(self.column_pitch)}n - {fmt(cfg.thickness)}",
-            f"Row grid:    {len(self.row_grid)} positions at {fmt(self.row_pitch)} in pitch "
-            f"(y = {fmt(min(self.row_grid.values()))} .. {fmt(max(self.row_grid.values()))})",
+            f"Column grid: {cfg.column_steps} steps of {fmt(self.column_pitch)} in across the width, "
+            f"{len(self.column_grid)} usable positions (x = {fmt(min(self.column_grid.values()))} .. "
+            f"{fmt(max(self.column_grid.values()))}); a cell n steps wide is {fmt(self.column_pitch)}n - {fmt(cfg.thickness)}",
+            f"Row grid:    {cfg.row_steps} steps of {fmt(self.row_pitch)} in along the depth, "
+            f"{len(self.row_grid)} usable positions (y = {fmt(min(self.row_grid.values()))} .. "
+            f"{fmt(max(self.row_grid.values()))})",
             f"Tops: interior level {fmt(self.level)} in; front corners {fmt(cfg.corner_rise)} in higher, "
             f"stepping down ({cfg.corner_curve}, {fmt(self.shoulder_width(cfg.corner_rise))} in long) "
             f"{fmt(cfg.step_gap)} in before the first slot "
