@@ -287,3 +287,20 @@ def test_stepped_ends_with_a_long_low_end():
     assert len(f.samples(15.0, 20.0)) == 2 + 13
     with pytest.raises(ValueError):
         SteppedEnds(20.0, 4.0, 0.5, -0.5, 1.0, end_plateau=19.0)
+
+
+def test_stepped_ends_ease():
+    from lasercut.panel import SteppedEnds
+    f = SteppedEnds(20.0, 4.0, 0.5, -0.5, 1.0, "ease", end_plateau=3.0, run=2.0)
+    assert f.width(0.5) == 2.0 and f.width(0.0) == 0.0
+    assert f(1.0) == 4.5 and f(2.0) == pytest.approx(4.25) and f(3.0) == pytest.approx(4.0)
+    assert f(10.0) == 4.0
+    assert f(15.0) == pytest.approx(4.0) and f(16.0) == pytest.approx(3.75) and f(17.0) == pytest.approx(3.5)
+    ys = [f(x / 64) for x in range(20 * 64 + 1)]
+    steepest = max(abs(b - a) for a, b in zip(ys, ys[1:])) * 64
+    assert steepest == pytest.approx(1.5 * 0.5 / 2.0, rel=0.02)      # 21 degrees, at the midpoint
+    assert abs(f(1.05) - 4.5) < 0.002 and abs(f(2.95) - 4.0) < 0.002  # level at both ends
+    g = SteppedEnds(20.0, 4.0, 0.5, 0.5, 1.0, "ease")
+    assert g.run == 2.0                                                # default run is four steps
+    with pytest.raises(ValueError):
+        SteppedEnds(20.0, 4.0, 0.5, 0.5, 9.0, "ease", run=2.0)
