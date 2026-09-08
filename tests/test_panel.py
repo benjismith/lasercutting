@@ -178,3 +178,14 @@ def test_side_notches_clip_to_a_low_corner():
     assert max(y for _, y in pts) <= 4.5 + 1e-9
     assert (0.25, 4.2) in pts and (9.75, 4.3) in pts       # clipped notch corners
     assert not any(abs(x) < 1e-9 and y > 4.2 + 1e-9 for x, y in pts)
+
+
+def test_wander_caps_the_slope():
+    import math
+    import random
+    from lasercut.wave import wander
+    # a 1 in range with features allowed 2 in apart would be steeper than 30 degrees unlimited
+    f = wander(12.0, [(0.0, 3.5), (12.0, 3.5)], 3.5, 4.5, 4.0, random.Random("steep"), min_spacing=2.0)
+    ys = [f(x / 32) for x in range(12 * 32 + 1)]
+    assert max(abs(b - a) for a, b in zip(ys, ys[1:])) <= (1 / 32) * math.tan(math.radians(31))
+    assert f(0) == 3.5 and f(12) == 3.5

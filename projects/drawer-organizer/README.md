@@ -66,7 +66,7 @@ All in `config.py`, all in inches.
 | `column_pitch` | 1.5 | target spacing of column-divider positions across the width; snapped, see below |
 | `row_pitch` | 2.5 | target spacing of row-divider positions along the depth; snapped |
 | `notch_depth` | 1.25 | how far a divider's ear engages its slot, measured from the low level |
-| `wave_swing` | 0.5 | rise and fall of the top edges, so tops run from 4.0 to 4.5; 0 for straight tops |
+| `wave_swing` | 1.0 | rise and fall of the top edges, so tops run from 3.5 to 4.5; 0 for straight tops |
 | `wave_length` | 10 | rough distance between crests; feature spacing never drops below a fifth of it or 2 in, which keeps slopes gentle |
 | `wave_seed` | 1 | reshuffles every panel's highs and lows |
 | `finger_width` | 0.5 | target; the real width makes an odd finger count |
@@ -81,10 +81,11 @@ negative is left, positive is right; row index 0 is the middle of the depth, neg
 toward the front. Grid positions that would run into a gusset are dropped, so with the defaults there
 are 15 column positions and 5 row positions (19 and 7 without gussets).
 
-**Slot depths with wavy tops.** The low level is `height - wave_swing` (4.0). Slot
-floors are `notch_depth` below that (2.75 above the drawer bottom), so a wall's slots
-are 1.25 to 1.75 in deep depending on where its wave is, and every divider's bottom
-notch is 2.75 in tall.
+**Slot depths with wavy tops.** The low level is `height - wave_swing` (3.5). Slot
+floors are `notch_depth` below that (2.25 above the drawer bottom), so a wall's slots
+are 1.25 to 2.25 in deep depending on where its wave is, and every divider's bottom
+notch is 2.25 in tall. Rises and falls are capped at about 30 degrees, so a bolder
+swing spreads features out rather than steepening them.
 
 **Pitch snapping.** A cell against a wall is bounded by one wall face and one divider
 face; a cell between dividers by two divider faces. For the same number of grid steps
