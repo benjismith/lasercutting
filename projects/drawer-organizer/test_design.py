@@ -18,6 +18,15 @@ def test_outer_size_and_grid(design):
     assert len(design.row_grid) == 5
 
 
+def test_pitch_snaps_so_wall_cells_match_divider_cells(design):
+    assert design.column_pitch == pytest.approx((design.width - 0.25) / 20)
+    assert design.row_pitch == pytest.approx((design.depth - 0.25) / 8)
+    widths = [w for _, w, _ in design.cells()]
+    assert widths[0] == widths[1] == widths[2] == pytest.approx(3 * design.column_pitch - 0.25)
+    assert widths[3] == pytest.approx(4 * design.column_pitch - 0.25)
+    assert widths[4] == pytest.approx(7 * design.column_pitch - 0.25)
+
+
 def test_egg_crate_notches_are_complementary(design):
     assert design.top_notch_depth == 1.25
     assert design.top_notch_depth + design.bottom_notch_depth == design.height
@@ -33,6 +42,8 @@ def test_panel_sizes(design):
     x1 = design.column_grid[CONFIG.columns[0]] - 0.125
     x3 = design.column_grid[CONFIG.columns[2]] + 0.125
     assert row.outline.length == pytest.approx(x3 - x1)
+    # a row divider in one of the equal columns spans the cell plus two divider faces
+    assert by_name["row_1"].outline.length == pytest.approx(4.15625 + 0.5)
 
 
 def test_cut_list_needs_passthrough_for_walls(design):

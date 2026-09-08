@@ -46,8 +46,8 @@ class OrganizerConfig:
     clearance: float = 1 / 16       # gap between the box and each drawer wall
     height: float = 5.5             # wall and divider height
     thickness: float = 0.25         # measured stock thickness
-    column_pitch: float = 1.5       # spacing of column-divider positions along the width
-    row_pitch: float = 1.5          # spacing of row-divider positions along the depth
+    column_pitch: float = 1.5       # target spacing of column-divider positions along the width
+    row_pitch: float = 2.5          # target spacing of row-divider positions along the depth
     notch_depth: float | None = None  # top-edge notch depth on walls and column dividers; default height/2
     finger_width: float = 0.5       # target finger width at the corners
     edge_margin: float = 0.5        # solid material kept between a grid notch and a corner joint
@@ -55,6 +55,16 @@ class OrganizerConfig:
     gusset_tabs: int = 2            # tabs along each gusset leg
     columns: list[int] = field(default_factory=list)       # column-grid indices holding a divider
     rows: list[RowDivider] = field(default_factory=list)
+
+
+def snap_pitch(length: float, target_pitch: float, thickness: float) -> float:
+    """The pitch nearest `target_pitch` such that an even number of pitches spans the
+    wall's length minus one stock thickness. With that, a cell against a wall and a
+    cell between two dividers are the same width for the same number of grid steps:
+    every cell is steps * pitch - thickness."""
+    span = length - thickness
+    n = max(2, 2 * round(span / target_pitch / 2))
+    return span / n
 
 
 def grid(length: float, pitch: float, thickness: float, clear: float) -> dict[int, float]:
@@ -78,8 +88,10 @@ class Design:
         self.top_notch_depth = cfg.height / 2 if cfg.notch_depth is None else cfg.notch_depth
         self.bottom_notch_depth = cfg.height - self.top_notch_depth
         clear = max(cfg.edge_margin, cfg.gusset_leg)  # dividers must miss the gussets too
-        self.column_grid = grid(self.width, cfg.column_pitch, t, clear)
-        self.row_grid = grid(self.depth, cfg.row_pitch, t, clear)
+        self.column_pitch = snap_pitch(self.width, cfg.column_pitch, t)
+        self.row_pitch = snap_pitch(self.depth, cfg.row_pitch, t)
+        self.column_grid = grid(self.width, self.column_pitch, t, clear)
+        self.row_grid = grid(self.depth, self.row_pitch, t, clear)
         self.gusset_tab_spans = even_tab_spans(cfg.gusset_leg, cfg.gusset_tabs) if cfg.gusset_leg > 0 else []
         self.finger_count = odd_finger_count(cfg.height, cfg.finger_width)
         self._validate()
@@ -224,9 +236,10 @@ class Design:
         lines = [
             f"Drawer organizer: outer {fmt(self.width)} x {fmt(self.depth)} x {fmt(self.height)} in, "
             f"{fmt(cfg.thickness)} in stock, {fmt(cfg.clearance)} in clearance per side",
-            f"Column grid: {len(self.column_grid)} positions at {fmt(cfg.column_pitch)} in pitch "
-            f"(x = {fmt(min(self.column_grid.values()))} .. {fmt(max(self.column_grid.values()))})",
-            f"Row grid:    {len(self.row_grid)} positions at {fmt(cfg.row_pitch)} in pitch "
+            f"Column grid: {len(self.column_grid)} positions at {fmt(self.column_pitch)} in pitch "
+            f"(x = {fmt(min(self.column_grid.values()))} .. {fmt(max(self.column_grid.values()))}); "
+            f"a cell n steps wide is {fmt(self.column_pitch)}n - {fmt(cfg.thickness)}",
+            f"Row grid:    {len(self.row_grid)} positions at {fmt(self.row_pitch)} in pitch "
             f"(y = {fmt(min(self.row_grid.values()))} .. {fmt(max(self.row_grid.values()))})",
             f"Egg-crate notches: {fmt(self.top_notch_depth)} in down from wall tops, "
             f"{fmt(self.bottom_notch_depth)} in up from divider bottoms",

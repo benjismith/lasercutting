@@ -3,6 +3,10 @@
 Grid indices count outward from the middle of the drawer: column index 0 is the
 divider position at the drawer's centre line, -1 is one pitch to the left, +1 one
 pitch to the right. Row indices work the same way front (negative) to back (positive).
+
+The pitch is nudged so that a cell n grid steps wide is always n * pitch - thickness,
+whether it sits against a wall or between two dividers. With 20 column steps across
+this box, a divider at index -7 is three steps in from the left wall.
 """
 from design import OrganizerConfig, RowDivider
 
@@ -18,8 +22,9 @@ CONFIG = OrganizerConfig(
     notch_depth=1.25,
     gusset_leg=3.0,
     gusset_tabs=2,
-    # Column dividers at these grid positions (left to right).
-    columns=[-6, -3, 0, 4],
+    # Column dividers at these grid positions (left to right): three equal columns of
+    # 3 steps each on the left, then a 4-step and a 7-step column.
+    columns=[-7, -4, -1, 3],
     # Row dividers: (start boundary, end boundary, row index). Boundary 0 is the left
     # wall, 1..4 the column dividers above, 5 the right wall.
     rows=[

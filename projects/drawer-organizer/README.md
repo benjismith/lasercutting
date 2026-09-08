@@ -53,14 +53,14 @@ All in `config.py`, all in inches.
 | `clearance` | 1/16 per side | box is the drawer size minus twice this |
 | `height` | 4.5 | wall and divider height |
 | `thickness` | 0.25 | **measure your actual stock with calipers** and set this |
-| `column_pitch` | 1.5 | spacing of column-divider positions across the width |
-| `row_pitch` | 2.5 | spacing of row-divider positions along the depth |
+| `column_pitch` | 1.5 | target spacing of column-divider positions across the width; snapped, see below |
+| `row_pitch` | 2.5 | target spacing of row-divider positions along the depth; snapped |
 | `notch_depth` | 1.25 | depth of the top-edge notches; dividers' bottom notches get the rest (3.25) |
 | `finger_width` | 0.5 | target; the real width makes an odd finger count |
 | `edge_margin` | 0.5 | solid wood kept between the outermost notch and a corner joint |
 | `gusset_leg` | 3.0 | leg length of the corner gussets; 0 removes them |
 | `gusset_tabs` | 2 | tabs along each gusset leg |
-| `columns` | `[-6, -3, 0, 4]` | grid indices of column dividers, 0 at the centre |
+| `columns` | `[-7, -4, -1, 3]` | grid indices of column dividers, 0 at the centre |
 | `rows` | five dividers | `(start boundary, end boundary, row index)` |
 
 Grid indices count outward from the middle: column index 0 is the drawer's centre line,
@@ -68,20 +68,29 @@ negative is left, positive is right; row index 0 is the middle of the depth, neg
 toward the front. Grid positions that would run into a gusset are dropped, so with the defaults there
 are 15 column positions and 5 row positions (19 and 7 without gussets).
 
+**Pitch snapping.** A cell against a wall is bounded by one wall face and one divider
+face; a cell between dividers by two divider faces. For the same number of grid steps
+those differ by half a stock thickness, unless an even number of pitches spans the wall
+length minus one thickness. So the pitch is nudged to the nearest value that does: here
+1.46875 in across (20 steps) and 2.484 in front to back (8 steps). Then any cell is
+simply steps x pitch minus thickness, wherever it sits, and columns given the same
+number of steps come out identical.
+
 ## Current layout
 
-Running `build.py` prints this. Five columns, left to right:
+Running `build.py` prints this. Three equal columns on the left (3 grid steps each),
+then a 4-step and a 7-step column:
 
 | column | clear width | cells front to back |
 |---|---|---|
-| 1 | 5.4375 | 9.6875 / 9.6875 |
-| 2 | 4.25 | 7.1875 / 12.1875 |
-| 3 | 4.25 | 7.1875 / 7.25 / 4.6875 |
-| 4 | 5.75 | 19.625 |
-| 5 | 8.4375 | 4.6875 / 9.75 / 4.6875 |
+| 1 | 4.15625 | 9.6875 / 9.6875 |
+| 2 | 4.15625 | 7.203 / 12.172 |
+| 3 | 4.15625 | 7.203 / 7.203 / 4.719 |
+| 4 | 5.625 | 19.625 |
+| 5 | 10.03125 | 4.719 / 9.6875 / 4.719 |
 
-This is a demonstration layout that exercises every joint type, not a proposal for
-what belongs in the drawer.
+The row dividers are still the demonstration set that exercises every joint type; their
+lengths follow the columns automatically.
 
 ## Cutting
 
@@ -90,7 +99,7 @@ what belongs in the drawer.
 | long wall | 2 | 29.625 x 4.5 | passthrough |
 | short wall | 2 | 20.125 x 4.5 | passthrough |
 | column divider | 4 | 20.125 x 4.5 | passthrough |
-| row dividers | 5 | 4.75 to 9.25 x 4.5 | fit on the bed |
+| row dividers | 5 | 4.66 to 10.53 x 4.5 | fit on the bed |
 | corner gusset | 4 | 3.25 x 3.25 | fit on the bed |
 
 Every part that runs the full depth of the drawer is just over the 19.5 in bed, so the
@@ -108,13 +117,13 @@ stock thickness get applied at that stage; the geometry here is nominal.
    the dividers' 3.25 in bottom notches do the holding. The trade-off is that a divider
    is held sideways only by its 1.25 in ear in the wall slot, so a loose fit lets it
    rock; kerf compensation at export should aim for a snug fit.
-3. **Pitch 1.5 in across, 2.5 in front to back.** Column positions stay fine-grained;
-   row positions are deliberately few (7).
+3. **Pitch about 1.5 in across, 2.5 in front to back,** snapped as described above.
+   Column positions stay fine-grained; row positions are deliberately few.
 4. **Corner gussets, 3 in legs.** They triangulate the corners of a box that otherwise
    has nothing keeping it square once it leaves the drawer. The cost is a triangle of
    floor in each corner cell and the divider positions nearest the corners, which only
    ever made cells under 2.5 in wide. A 2 in leg keeps one more column position per
-   side. They assume the box is glued; see the note in the joint description.
+   side. The box is glued, so they earn their keep.
 5. **Stock thickness.** Nominal 1/4 in plywood is usually 0.2 to 0.23 in. The design
    scales with `thickness`, so measure before cutting.
 6. **Grain and faces.** Plywood cuts the same either side up, and the walls' outer faces
