@@ -8,6 +8,7 @@ bed width.
 
 BED_LONG = 19.5
 BED_SHORT = 11.0
+PASSTHROUGH_WIDTH = 20.0  # widest stock the Pro's slot accepts
 KERF = 0.008  # typical cut width in 1/4 in plywood; measure on your own stock
 
 

@@ -63,3 +63,7 @@ LAYOUTS = {
 }
 
 CONFIG = LAYOUTS["three-plus-two"]
+
+# The plywood on hand: pre-cut sheets, fed long side first through the passthrough.
+# Parts are kept edge_margin in from each long edge.
+STOCK = {"width": 19.0, "length": 48.0, "edge_margin": 0.125}

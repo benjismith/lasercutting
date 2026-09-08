@@ -9,7 +9,7 @@ orderings are tried and the best kept.
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -32,7 +32,8 @@ class Placed:
 @dataclass
 class Nesting:
     placed: list[Placed]
-    length: float   # sheet length used
+    length: float                 # sheet length used
+    leftover: list[Part] = field(default_factory=list)   # parts that did not fit (fixed-length sheets only)
 
 
 _Rect = tuple[float, float, float, float]  # x, y, w, h
@@ -41,11 +42,18 @@ _Rect = tuple[float, float, float, float]  # x, y, w, h
 def nest(parts: list[Part], width: float, gap: float = 0.0, tries: int = 300,
          seed: int = 1, max_length: float | None = None) -> Nesting:
     """Pack `parts` onto a sheet `width` across, with at least `gap` between parts
-    and from the edges, minimising the length used. With `max_length` the packing
-    fails (ValueError) if the parts do not fit."""
+    and from the edges, minimising the length used. With `max_length` the sheet is
+    that long: parts that do not fit are returned in `leftover` (the ordering that
+    places the most area wins, then the shortest), and a part that can never fit
+    raises ValueError."""
     for p in parts:
         if min(p.width, p.height) + 2 * gap > width:
             raise ValueError(f"{p.name} is too wide for the sheet in either orientation")
+        if max_length is not None:
+            fits_flat = p.width + 2 * gap <= width and p.height + 2 * gap <= max_length
+            fits_turned = p.height + 2 * gap <= width and p.width + 2 * gap <= max_length
+            if not (fits_flat or fits_turned):
+                raise ValueError(f"{p.name} does not fit the sheet in either orientation")
     rng = random.Random(seed)
     orders = [
         sorted(parts, key=lambda p: -max(p.width, p.height)),
@@ -60,20 +68,29 @@ def nest(parts: list[Part], width: float, gap: float = 0.0, tries: int = 300,
     best: Nesting | None = None
     for order in orders:
         result = _pack(order, width, gap, max_length)
-        if result is None:
-            continue
-        if best is None or result.length < best.length - 1e-9:
+        if best is None or _better(result, best):
             best = result
-    if best is None:
-        raise ValueError("parts do not fit on the sheet")
+    assert best is not None
     return best
 
 
-def _pack(order: list[Part], width: float, gap: float, max_length: float | None) -> Nesting | None:
+def _placed_area(n: Nesting) -> float:
+    return sum(p.width * p.height for p in n.placed)
+
+
+def _better(a: Nesting, b: Nesting) -> bool:
+    """More placed area wins; then the shorter sheet."""
+    if abs(_placed_area(a) - _placed_area(b)) > 1e-9:
+        return _placed_area(a) > _placed_area(b)
+    return a.length < b.length - 1e-9
+
+
+def _pack(order: list[Part], width: float, gap: float, max_length: float | None) -> Nesting:
     inner_w = width - gap                      # each part carries one gap on its right and top
     limit = (max_length - gap) if max_length is not None else 1e9
     free: list[_Rect] = [(gap, gap, inner_w - gap, limit - gap)]
     placed: list[Placed] = []
+    leftover: list[Part] = []
     used = 0.0
     for part in order:
         choice = None
@@ -86,12 +103,13 @@ def _pack(order: list[Part], width: float, gap: float, max_length: float | None)
                     if choice is None or score < choice[0]:
                         choice = (score, fx, fy, w, h, rotated)
         if choice is None:
-            return None
+            leftover.append(part)
+            continue
         _, x, y, w, h, rotated = choice
         placed.append(Placed(part.name, x, y, w, h, rotated))
         used = max(used, y + h)
         free = _split(free, (x, y, w + gap, h + gap))
-    return Nesting(placed, used + gap)
+    return Nesting(placed, used + gap, leftover)
 
 
 def _split(free: list[_Rect], used: _Rect) -> list[_Rect]:

@@ -50,7 +50,16 @@ def test_nest_rejects_impossible_parts():
     with pytest.raises(ValueError):
         nest([Part("x", 25.0, 21.0)], 19.5)
     with pytest.raises(ValueError):
-        nest([Part("x", 10.0, 10.0), Part("y", 10.0, 10.0)], 19.5, max_length=12.0)
+        nest([Part("x", 30.0, 4.0)], 19.5, max_length=24.0)
+
+
+def test_fixed_length_sheet_carries_the_rest_over():
+    parts = [Part("a", 10.0, 10.0), Part("b", 10.0, 10.0), Part("c", 3.0, 3.0)]
+    result = nest(parts, 19.5, gap=0.1, max_length=12.0, tries=20)
+    assert {p.name for p in result.placed} == {"a", "c"} or {p.name for p in result.placed} == {"b", "c"}
+    assert len(result.leftover) == 1 and result.leftover[0].width == 10.0
+    assert result.length <= 12.0
+    assert all(p.y + p.height <= 12.0 - 0.1 + 1e-9 for p in result.placed)
 
 
 def test_part_path_uses_beziers_for_ease_shoulders():

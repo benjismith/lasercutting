@@ -151,13 +151,15 @@ of slop front to back.
 
     uv run python projects/drawer-organizer/cutfiles.py --layout three-plus-two --kerf 0.008
 
-writes `out/cut/three-plus-two.svg`, every part nested on one sheet 20 in wide (the
-most the Pro passthrough takes) with parts kept inside the 19.5 in cuttable width,
-plus `kerf-coupon.svg` and a nesting report. The SVG is in real inches, one closed
-path per part, cut strokes black, so it drops into the Glowforge app or Illustrator
-at the right size. Ease shoulders are true Bezier curves. The nested sheet is about
-58 in long; a fixed stock length (`--sheet-length 48`) splits the parts across
-several sheets instead.
+nests every part onto the stock described in `config.STOCK`, pre-cut 48 x 19 in
+sheets fed long side first through the passthrough, and writes one SVG per sheet
+(`out/cut/three-plus-two-sheet1.svg`, `-sheet2.svg`), plus `kerf-coupon.svg` and a
+nesting report. Parts stay 1/8 in from the long edges. Each SVG is the size of the
+sheet in real inches, one closed path per part, cut strokes black, so it drops into
+the Glowforge app or Illustrator at true scale. Ease shoulders are true Bezier curves.
+The parts need two sheets; the second is packed from one end so the rest is a clean
+offcut. Different stock: `--sheet-width`, `--sheet-length` (0 for one sheet of any
+length, up to 20 in wide).
 
 **Kerf.** Every part is offset outward by half the kerf before writing, so slots come
 off the laser a stock thickness wide and ears a stock thickness thick. The right kerf

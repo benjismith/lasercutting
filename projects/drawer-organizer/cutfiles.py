@@ -4,6 +4,8 @@ Runs in plain Python (no Blender). From the repo root:
 
     uv run python projects/drawer-organizer/cutfiles.py --layout three-plus-two --kerf 0.008
 
+Stock defaults come from config.STOCK (the sheets on hand); the options override them.
+
 Writes into --out (default out/cut):
     <layout>.svg        every part nested on one sheet, in inches, ready for the Glowforge
     kerf-coupon.svg     a test piece with three slots at three kerf settings
@@ -12,9 +14,10 @@ Writes into --out (default out/cut):
 Options:
     --layout NAME        a layout from config.LAYOUTS (default config.CONFIG)
     --kerf IN            laser kerf; parts are offset outward by half of it (default 0.008)
-    --sheet-width IN     material width (default 20, the most the Pro passthrough takes)
-    --cut-width IN       cuttable width across the bed (default 19.5)
-    --sheet-length IN    fixed material length; splits into several sheets (default: one sheet, any length)
+    --sheet-width IN     material width (at most 20, the Pro passthrough limit)
+    --cut-width IN       width to actually use, leaving a margin at each edge (default: sheet width less 0.25)
+    --sheet-length IN    material length; parts are split across as many sheets as needed
+                         (pass 0 for one sheet of any length)
     --gap IN             spacing between parts (default 0.1)
     --out DIR
 """
@@ -41,9 +44,9 @@ def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     ap.add_argument("--layout")
     ap.add_argument("--kerf", type=float, default=glowforge.KERF)
-    ap.add_argument("--sheet-width", type=float, default=20.0)
-    ap.add_argument("--cut-width", type=float, default=glowforge.BED_LONG)
-    ap.add_argument("--sheet-length", type=float)
+    ap.add_argument("--sheet-width", type=float, default=config.STOCK["width"])
+    ap.add_argument("--cut-width", type=float)
+    ap.add_argument("--sheet-length", type=float, default=config.STOCK["length"])
     ap.add_argument("--gap", type=float, default=0.1)
     ap.add_argument("--out", default=os.path.join(ROOT, "out", "cut"))
     return ap.parse_args()
@@ -60,25 +63,11 @@ def nest_design(d: design.Design, cut_width: float, gap: float, kerf: float,
     sheets = []
     remaining = parts
     while remaining:
-        if sheet_length is None:
-            result = nest(remaining, cut_width, gap, tries=2000)
-            sheets.append(result)
-            break
-        # fixed length: pack what fits, biggest first, and carry the rest to another sheet
-        result = None
-        order = sorted(remaining, key=lambda p: -max(p.width, p.height))
-        chosen = list(order)
-        while chosen:
-            try:
-                result = nest(chosen, cut_width, gap, tries=2000, max_length=sheet_length)
-                break
-            except ValueError:
-                chosen = chosen[:-1]
-        if result is None:
+        result = nest(remaining, cut_width, gap, tries=2000, max_length=sheet_length)
+        if not result.placed:
             raise SystemExit("a part does not fit on the sheet at all")
         sheets.append(result)
-        placed = {pl.name for pl in result.placed}
-        remaining = [p for p in remaining if p.name not in placed]
+        remaining = result.leftover
     return sheets, by_name
 
 
@@ -129,6 +118,12 @@ def write_coupon(path: str, thickness: float, kerf: float) -> None:
 
 def main() -> None:
     args = parse_args()
+    if args.sheet_width > glowforge.PASSTHROUGH_WIDTH + 1e-9:
+        raise SystemExit(f"sheet width {args.sheet_width:g} exceeds the passthrough limit of {glowforge.PASSTHROUGH_WIDTH:g} in")
+    if args.cut_width is None:
+        args.cut_width = min(args.sheet_width - 2 * config.STOCK["edge_margin"], glowforge.BED_LONG)
+    if args.sheet_length is not None and args.sheet_length <= 0:
+        args.sheet_length = None
     cfg = config.LAYOUTS[args.layout] if args.layout else config.CONFIG
     name = args.layout or next(k for k, v in config.LAYOUTS.items() if v is cfg)
     d = design.Design(cfg)
@@ -146,7 +141,8 @@ def main() -> None:
                              args.kerf, args.gap, args.sheet_length)
         total_length += length
         report.append(f"\n{os.path.relpath(path, ROOT)}: {args.sheet_width:g} x {length:.2f} in"
-                      + (f" (parts use {nesting.length:.2f} in of length)" if args.sheet_length else ""))
+                      + (f", parts use the first {nesting.length:.2f} in; the last "
+                         f"{length - nesting.length:.2f} in is offcut" if args.sheet_length else ""))
         for pl in sorted(nesting.placed, key=lambda q: (q.y, q.x)):
             report.append(f"  {pl.name:<20} at x={pl.x:6.2f} y={pl.y:6.2f}  "
                           f"{pl.width:5.2f} x {pl.height:5.2f}{'  rotated' if pl.rotated else ''}")
