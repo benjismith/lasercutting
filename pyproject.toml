@@ -1,0 +1,13 @@
+[project]
+name = "lasercutting"
+version = "0.1.0"
+description = "Glowforge Pro projects: parametric geometry, Blender previews, cut files"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "projects/drawer-organizer"]
+testpaths = ["tests", "projects"]
