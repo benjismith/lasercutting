@@ -15,10 +15,11 @@ def test_outer_size_and_grid(design):
     assert xs == sorted(xs) and len(xs) == 19
     assert xs[0] + xs[-1] == pytest.approx(design.width)  # symmetric about the centre
     assert xs[0] - 0.125 >= 0.25 + 0.5                   # clear of the corner joint plus margin
-    assert len(design.row_grid) == 13
+    assert len(design.row_grid) == 7
 
 
 def test_egg_crate_notches_are_complementary(design):
+    assert design.top_notch_depth == 1.25
     assert design.top_notch_depth + design.bottom_notch_depth == design.height
 
 

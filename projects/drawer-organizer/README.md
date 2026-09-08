@@ -42,10 +42,11 @@ All in `config.py`, all in inches.
 | parameter | default | notes |
 |---|---|---|
 | `clearance` | 1/16 per side | box is the drawer size minus twice this |
-| `height` | 5.5 | wall and divider height; see open questions |
+| `height` | 4.5 | wall and divider height |
 | `thickness` | 0.25 | **measure your actual stock with calipers** and set this |
-| `column_pitch`, `row_pitch` | 1.5 | spacing of the notch grid |
-| `notch_depth` | half the height | depth of the top-edge notches; dividers get the rest |
+| `column_pitch` | 1.5 | spacing of column-divider positions across the width |
+| `row_pitch` | 2.5 | spacing of row-divider positions along the depth |
+| `notch_depth` | 1.25 | depth of the top-edge notches; dividers' bottom notches get the rest (3.25) |
 | `finger_width` | 0.5 | target; the real width makes an odd finger count |
 | `edge_margin` | 0.5 | solid wood kept between the outermost notch and a corner joint |
 | `columns` | `[-6, -3, 0, 4]` | grid indices of column dividers, 0 at the centre |
@@ -53,7 +54,7 @@ All in `config.py`, all in inches.
 
 Grid indices count outward from the middle: column index 0 is the drawer's centre line,
 negative is left, positive is right; row index 0 is the middle of the depth, negative
-toward the front. With the defaults there are 19 column positions and 13 row positions.
+toward the front. With the defaults there are 19 column positions and 7 row positions.
 
 ## Current layout
 
@@ -62,10 +63,10 @@ Running `build.py` prints this. Five columns, left to right:
 | column | clear width | cells front to back |
 |---|---|---|
 | 1 | 5.4375 | 9.6875 / 9.6875 |
-| 2 | 4.25 | 6.6875 / 12.6875 |
-| 3 | 4.25 | 6.6875 / 5.75 / 6.6875 |
+| 2 | 4.25 | 7.1875 / 12.1875 |
+| 3 | 4.25 | 7.1875 / 7.25 / 4.6875 |
 | 4 | 5.75 | 19.625 |
-| 5 | 8.4375 | 5.1875 / 8.75 / 5.1875 |
+| 5 | 8.4375 | 4.6875 / 9.75 / 4.6875 |
 
 This is a demonstration layout that exercises every joint type, not a proposal for
 what belongs in the drawer.
@@ -74,10 +75,10 @@ what belongs in the drawer.
 
 | part | count | size (in) | on the Glowforge |
 |---|---|---|---|
-| long wall | 2 | 29.625 x 5.5 | passthrough |
-| short wall | 2 | 20.125 x 5.5 | passthrough |
-| column divider | 4 | 20.125 x 5.5 | passthrough |
-| row dividers | 5 | 4.75 to 9.25 x 5.5 | fit on the bed |
+| long wall | 2 | 29.625 x 4.5 | passthrough |
+| short wall | 2 | 20.125 x 4.5 | passthrough |
+| column divider | 4 | 20.125 x 4.5 | passthrough |
+| row dividers | 5 | 4.75 to 9.25 x 4.5 | fit on the bed |
 
 Every part that runs the full depth of the drawer is just over the 19.5 in bed, so the
 walls and column dividers all need the passthrough. Shrinking the box to 19.5 in deep
@@ -89,13 +90,13 @@ stock thickness get applied at that stage; the geometry here is nominal.
 
 ## Decisions and open questions
 
-1. **Wall height 5.5 in, not 6.** The clearance above a drawer is usually less than the
-   drawer side height. Measure the gap with the drawer closed and set `height`.
-2. **Notch depth half the height.** Deep notches give the most rigid joint but leave
-   visible slots along the wall tops wherever no divider sits. A shallower notch (say
-   1.5 in) looks cleaner and the dividers still hold, but they can rock a little at the
-   bottom. Set `notch_depth` to try it.
-3. **1.5 in pitch.** Finer pitch means more positions and more notches. Try 1 in or 2 in.
+1. **Wall height 4.5 in** in a drawer about 6 in tall, leaving generous clearance above.
+2. **Notch depth 1.25 in.** Shallow top-edge notches keep the wall tops mostly clean;
+   the dividers' 3.25 in bottom notches do the holding. The trade-off is that a divider
+   is held sideways only by its 1.25 in ear in the wall slot, so a loose fit lets it
+   rock; kerf compensation at export should aim for a snug fit.
+3. **Pitch 1.5 in across, 2.5 in front to back.** Column positions stay fine-grained;
+   row positions are deliberately few (7).
 4. **Stock thickness.** Nominal 1/4 in plywood is usually 0.2 to 0.23 in. The design
    scales with `thickness`, so measure before cutting.
 5. **Grain and faces.** Plywood cuts the same either side up, and the walls' outer faces
