@@ -12,10 +12,13 @@ column dividers in between with the same joint.
 Four flat triangular gussets lie on the drawer floor in the box's corners, tabbed
 through the bottom edges of both walls they touch, to keep the glued box square.
 
-Tops: the walls stand at full height over the outer inch at each corner, drop by a
-circular shoulder to the interior level, and run flat at that level everywhere else.
-Dividers are flat at the interior level, so every ear is flush with the edge it
-passes through and every slot is the same depth.
+Tops: the front corners stand at full height over the outer inch, drop by an S-shaped
+shoulder to the interior level, and the walls run flat at that level. The back edge of
+the whole box sits lower: the back wall is flat at `back_level`, and the side walls
+and column dividers step down to it over their last inch through the same shoulder
+inverted. Dividers are otherwise flat at the interior level, so every ear is flush
+with the edge it passes through. Slot floors sit a fixed engagement below the local
+top, so the back wall's slots are lower than the rest.
 
 Coordinates: X runs left to right across the drawer, Y front to back, Z up. The box's
 outer footprint is [0, width] x [0, depth]; the front wall is at y=0.
@@ -27,7 +30,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from lasercut.glowforge import bed_fit
-from lasercut.panel import (Notch, Panel, PanelOutline, Placement, RaisedEnds, corner_gusset,
+from lasercut.panel import (Notch, Panel, PanelOutline, Placement, SteppedEnds, corner_gusset,
                             even_tab_spans, finger_notches, odd_finger_count)
 
 
@@ -54,7 +57,8 @@ class OrganizerConfig:
     column_pitch: float = 1.5       # target spacing of column-divider positions along the width
     row_pitch: float = 2.5          # target spacing of row-divider positions along the depth
     notch_depth: float | None = None  # how far a divider's ear engages a slot; default half the interior level
-    corner_rise: float = 0.5        # how much higher the corners stand than the interior level
+    corner_rise: float = 0.5        # how much higher the front corners stand than the interior level
+    back_level: float | None = None  # height of the whole back edge; None for raised back corners like the front
     corner_plateau: float = 1.0     # length of full-height edge at each corner before the shoulder
     corner_curve: str = "ogee"      # shoulder shape: 'ogee' (S of two quarter circles) or 'round' (one quarter circle)
     finger_width: float = 0.5       # target finger width at the corners
@@ -86,6 +90,19 @@ def grid(length: float, pitch: float, thickness: float, clear: float) -> dict[in
     return {k: center + k * pitch for k in range(-k_max, k_max + 1)}
 
 
+class _Flat:
+    """A level top edge below the panel's nominal height."""
+
+    def __init__(self, level: float):
+        self.level = self.top = level
+
+    def __call__(self, x: float) -> float:
+        return self.level
+
+    def samples(self, lo: float, hi: float) -> list[float]:
+        return [lo, hi]
+
+
 class Design:
     def __init__(self, cfg: OrganizerConfig):
         self.cfg = cfg
@@ -94,15 +111,22 @@ class Design:
         self.depth = cfg.drawer_depth - 2 * cfg.clearance
         self.height = cfg.height                             # at the raised corners
         self.level = cfg.height - cfg.corner_rise            # interior top level: walls between corners, all dividers
+        self.back_level = self.level if cfg.back_level is None else cfg.back_level   # top of the back wall
+        self.back_step = self.back_level - self.level        # how the side walls and column dividers reach it
         engagement = self.level / 2 if cfg.notch_depth is None else cfg.notch_depth
-        self.slot_floor = self.level - engagement            # every receiving notch's floor
-        self.wall_slot_depth = self.height - self.slot_floor  # wall slots, measured from the nominal (corner) height
+        self.engagement = engagement
+        self.slot_floor = self.level - engagement            # receiving notch floors at the interior level
+        self.back_slot_floor = self.back_level - engagement  # receiving notch floors in the back wall
+        self.wall_slot_depth = self.height - self.slot_floor  # front and side wall slots, from the nominal height
+        self.back_wall_slot_depth = self.height - self.back_slot_floor
         self.divider_slot_depth = self.level - self.slot_floor
         self.bottom_notch_depth = self.slot_floor            # a divider's bottom notch reaches this high
+        self.back_bottom_notch_depth = self.back_slot_floor  # at a column divider's back end
         # Slots must miss the gussets and sit past the corner shoulder (which is
         # measured from the wall's end, so take off the neighbouring wall's thickness).
+        shoulder = max(cfg.corner_rise, abs(self.back_step))
         clear = max(cfg.edge_margin, cfg.gusset_leg,
-                    cfg.corner_plateau + cfg.corner_rise + cfg.edge_margin - t)
+                    cfg.corner_plateau + shoulder + cfg.edge_margin - t)
         self.column_pitch = snap_pitch(self.width, cfg.column_pitch, t)
         self.row_pitch = snap_pitch(self.depth, cfg.row_pitch, t)
         self.column_grid = grid(self.width, self.column_pitch, t, clear)
@@ -139,9 +163,11 @@ class Design:
             raise ValueError("corner_plateau must cover at least the corner joint (one thickness)")
         if not (0 < self.slot_floor < self.level):
             raise ValueError("notch_depth must leave some wall below the slots")
+        if cfg.back_level is not None and not (0 < self.back_slot_floor < self.back_level <= self.height):
+            raise ValueError("back_level must be between the slot engagement and the wall height")
         if not self.column_grid or not self.row_grid:
             raise ValueError("grid pitch leaves no room for any notch")
-        shoulder_end = cfg.corner_plateau + cfg.corner_rise
+        shoulder_end = cfg.corner_plateau + max(cfg.corner_rise, abs(self.back_step))
         for g, name in ((self.column_grid, "column"), (self.row_grid, "row")):
             if min(g.values()) - cfg.thickness / 2 <= shoulder_end:
                 raise ValueError(f"the corner shoulder runs into the first {name} slot")
@@ -172,35 +198,53 @@ class Design:
 
     # --- panels -------------------------------------------------------------
 
-    def _wall_top(self, length: float) -> RaisedEnds | None:
+    def _top(self, length: float, start_step: float, end_step: float, level: float | None = None) -> SteppedEnds | None:
+        """Top-edge profile with the given steps at each end, or None if both are zero."""
         cfg = self.cfg
-        if cfg.corner_rise <= 0:
+        if start_step == 0 and end_step == 0:
             return None
-        return RaisedEnds(length, self.level, cfg.corner_rise, cfg.corner_plateau, cfg.corner_curve)
+        return SteppedEnds(length, self.level if level is None else level, start_step, end_step,
+                           cfg.corner_plateau, cfg.corner_curve)
+
+    def _front_wall_top(self, length: float) -> SteppedEnds | None:
+        return self._top(length, self.cfg.corner_rise, self.cfg.corner_rise)
+
+    def _side_wall_top(self, length: float) -> SteppedEnds | None:
+        back = self.cfg.corner_rise if self.cfg.back_level is None else self.back_step
+        return self._top(length, self.cfg.corner_rise, back)
+
+    def _column_top(self, length: float) -> SteppedEnds | None:
+        return self._top(length, 0.0, self.back_step)
 
     def _build_panels(self) -> list[Panel]:
         cfg = self.cfg
         t, W, D, H, level = cfg.thickness, self.width, self.depth, self.height, self.level
-        bottom = self.bottom_notch_depth
-        column_slots = [Notch.centered(x, t, self.wall_slot_depth) for x in self.column_grid.values()]
+        bottom, back_bottom = self.bottom_notch_depth, self.back_bottom_notch_depth
+        front_slots = [Notch.centered(x, t, self.wall_slot_depth) for x in self.column_grid.values()]
+        back_slots = [Notch.centered(x, t, self.back_wall_slot_depth) for x in self.column_grid.values()]
         row_slots_in_wall = [Notch.centered(y, t, self.wall_slot_depth) for y in self.row_grid.values()]
         row_slots_in_divider = [Notch.centered(y, t, self.divider_slot_depth) for y in self.row_grid.values()]
         long_fingers = finger_notches(H, t, self.finger_count, notch_first=False)
         short_fingers = finger_notches(H, t, self.finger_count, notch_first=True)
 
-        long_wall = PanelOutline(W, H, left=long_fingers, right=long_fingers, top=column_slots,
-                                 bottom=self._gusset_notches(W), top_profile=self._wall_top(W))
-        short_wall = PanelOutline(D, H, left=short_fingers, right=short_fingers, top=row_slots_in_wall,
-                                  bottom=self._gusset_notches(D), top_profile=self._wall_top(D))
+        front_wall = PanelOutline(W, H, left=long_fingers, right=long_fingers, top=front_slots,
+                                  bottom=self._gusset_notches(W), top_profile=self._front_wall_top(W))
+        if cfg.back_level is None:
+            back_wall = front_wall
+        else:
+            back_wall = PanelOutline(W, H, left=long_fingers, right=long_fingers, top=back_slots,
+                                     bottom=self._gusset_notches(W), top_profile=_Flat(self.back_level))
+        side_wall = PanelOutline(D, H, left=short_fingers, right=short_fingers, top=row_slots_in_wall,
+                                 bottom=self._gusset_notches(D), top_profile=self._side_wall_top(D))
         panels = [
-            Panel("wall_front", long_wall, t, Placement.upright_along_x((0.0, 0.0, 0.0)), "wall"),
-            Panel("wall_back", long_wall, t, Placement.upright_along_x((0.0, D - t, 0.0)), "wall"),
-            Panel("wall_left", short_wall, t, Placement.upright_along_y((0.0, 0.0, 0.0)), "wall"),
-            Panel("wall_right", short_wall, t, Placement.upright_along_y((W - t, 0.0, 0.0)), "wall"),
+            Panel("wall_front", front_wall, t, Placement.upright_along_x((0.0, 0.0, 0.0)), "wall"),
+            Panel("wall_back", back_wall, t, Placement.upright_along_x((0.0, D - t, 0.0)), "wall"),
+            Panel("wall_left", side_wall, t, Placement.upright_along_y((0.0, 0.0, 0.0)), "wall"),
+            Panel("wall_right", side_wall, t, Placement.upright_along_y((W - t, 0.0, 0.0)), "wall"),
         ]
 
-        column = PanelOutline(D, level, bottom=[Notch(0.0, t, bottom), Notch(D - t, D, bottom)],
-                              top=row_slots_in_divider)
+        column = PanelOutline(D, level, bottom=[Notch(0.0, t, bottom), Notch(D - t, D, back_bottom)],
+                              top=row_slots_in_divider, top_profile=self._column_top(D))
         for i, k in enumerate(cfg.columns, start=1):
             x = self.column_grid[k]
             panels.append(Panel(f"column_{i}", column, t, Placement.upright_along_y((x - t / 2, 0.0, 0.0)), "column"))
@@ -275,11 +319,12 @@ class Design:
             f"a cell n steps wide is {fmt(self.column_pitch)}n - {fmt(cfg.thickness)}",
             f"Row grid:    {len(self.row_grid)} positions at {fmt(self.row_pitch)} in pitch "
             f"(y = {fmt(min(self.row_grid.values()))} .. {fmt(max(self.row_grid.values()))})",
-            f"Tops: interior level {fmt(self.level)} in; corners {fmt(cfg.corner_rise)} in higher over the outer "
-            f"{fmt(cfg.corner_plateau)} in with a {cfg.corner_curve} shoulder",
-            f"Egg-crate slots: floors {fmt(self.slot_floor)} in above the drawer bottom, "
-            f"{fmt(self.level - self.slot_floor)} in deep from the interior level; divider bottom notches "
-            f"{fmt(self.bottom_notch_depth)} in",
+            f"Tops: interior level {fmt(self.level)} in; front corners {fmt(cfg.corner_rise)} in higher over the outer "
+            f"{fmt(cfg.corner_plateau)} in with a {cfg.corner_curve} shoulder"
+            + (f"; back edge at {fmt(self.back_level)} in, stepped down over the last {fmt(cfg.corner_plateau)} in"
+               if cfg.back_level is not None else "; back corners like the front"),
+            f"Egg-crate slots: {fmt(self.engagement)} in of ear engagement everywhere; floors at "
+            f"{fmt(self.slot_floor)} in (back wall {fmt(self.back_slot_floor)} in) above the drawer bottom",
             f"Corner joints: {self.finger_count} fingers of {fmt(self.height / self.finger_count)} in",
             (f"Corner gussets: {fmt(cfg.gusset_leg)} in legs, {cfg.gusset_tabs} tabs per leg"
              if cfg.gusset_leg > 0 else "Corner gussets: none"),

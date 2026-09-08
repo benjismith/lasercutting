@@ -85,54 +85,75 @@ class Profile:
         return min(self.hs)
 
 
-class RaisedEnds:
-    """A flat top edge at `level` whose two ends stand `rise` higher over the outer
-    `plateau` of length, each joined to the flat by a circular shoulder. Style
-    'round' is a convex quarter circle of radius `rise` (level at the top, vertical
-    where it meets the flat); 'ogee' is an S of two quarter circles of radius
-    `rise`/2, level at both ends. Both shoulders are `rise` wide."""
+class SteppedEnds:
+    """A flat top edge at `level` whose ends sit at different heights: the start end
+    at `level + start_step` and the finish end at `level + end_step` over the outer
+    `plateau` of length, each joined to the flat by a circular shoulder as wide as
+    the step is tall. A positive step raises the end, a negative one lowers it, and
+    zero leaves that end flat. Style 'ogee' is an S of two quarter circles, level at
+    both ends; 'round' is one quarter circle, level at the plateau and vertical where
+    it meets the flat."""
 
     ARC_STEPS = 12
 
-    def __init__(self, length: float, level: float, rise: float, plateau: float, style: str = "round"):
+    def __init__(self, length: float, level: float, start_step: float, end_step: float,
+                 plateau: float, style: str = "ogee"):
         if style not in ("round", "ogee"):
             raise ValueError("style must be 'round' or 'ogee'")
-        if rise <= 0 or plateau < 0 or 2 * (plateau + rise) > length:
-            raise ValueError("raised ends do not fit on the edge")
-        self.length, self.level, self.rise, self.plateau, self.style = length, level, rise, plateau, style
+        if plateau < 0 or 2 * plateau + abs(start_step) + abs(end_step) > length:
+            raise ValueError("stepped ends do not fit on the edge")
+        self.length, self.level, self.plateau, self.style = length, level, plateau, style
+        self.start_step, self.end_step = start_step, end_step
 
     @property
     def top(self) -> float:
-        return self.level + self.rise
+        return max(self.level, self.level + self.start_step, self.level + self.end_step)
 
-    def _shoulder(self, d: float) -> float:
-        """Height at distance d past the plateau, 0 <= d <= rise."""
-        r = self.rise
+    def _shoulder(self, step: float, d: float) -> float:
+        """Height at distance d past the plateau (0 <= d <= |step|) for an end that
+        steps by `step`."""
+        r, s = abs(step), (1.0 if step > 0 else -1.0)
+        end_h = self.level + step
         if self.style == "round":
-            return self.level + math.sqrt(max(0.0, r * r - d * d))
+            return self.level + s * math.sqrt(max(0.0, r * r - d * d))
         half = r / 2
         if d <= half:
-            return self.top - half + math.sqrt(max(0.0, half * half - d * d))
-        return self.level + half - math.sqrt(max(0.0, half * half - (r - d) ** 2))
+            return end_h - s * half + s * math.sqrt(max(0.0, half * half - d * d))
+        return self.level + s * half - s * math.sqrt(max(0.0, half * half - (r - d) ** 2))
 
     def __call__(self, x: float) -> float:
-        d = min(x, self.length - x) - self.plateau   # distance past the nearer plateau
-        if d <= 0:
-            return self.top
-        if d >= self.rise:
-            return self.level
-        return self._shoulder(d)
+        for step, d in ((self.start_step, x - self.plateau),
+                        (self.end_step, self.length - x - self.plateau)):
+            if step == 0:
+                continue
+            if d <= 0:
+                return self.level + step
+            if d < abs(step):
+                return self._shoulder(step, d)
+        return self.level
 
     def samples(self, lo: float, hi: float) -> list[float]:
         """Sample positions between lo and hi: dense on the shoulders, endpoints only
         on the flats."""
         xs = {lo, hi}
-        for start in (self.plateau, self.length - self.plateau - self.rise):
+        shoulders = []
+        if self.start_step:
+            shoulders.append((self.plateau, abs(self.start_step)))
+        if self.end_step:
+            shoulders.append((self.length - self.plateau - abs(self.end_step), abs(self.end_step)))
+        for start, width in shoulders:
             for i in range(self.ARC_STEPS + 1):
-                x = start + self.rise * i / self.ARC_STEPS
+                x = start + width * i / self.ARC_STEPS
                 if lo <= x <= hi:
                     xs.add(x)
         return sorted(xs)
+
+
+def RaisedEnds(length: float, level: float, rise: float, plateau: float, style: str = "round") -> SteppedEnds:
+    """Both ends raised by `rise`: a SteppedEnds with equal positive steps."""
+    if rise <= 0:
+        raise ValueError("rise must be positive")
+    return SteppedEnds(length, level, rise, rise, plateau, style)
 
 
 @dataclass
@@ -178,9 +199,9 @@ class PanelOutline:
                 prev_end = n.end
         if self.top_profile is not None:
             f = self.top_profile
-            for x in (0.0, self.length):
-                if f(x) > self.height + EPS:
-                    raise ValueError(f"top profile rises above the panel height at x={x}")
+            for h in (f(0.0), f(self.length), getattr(f, "top", f(self.length / 2))):
+                if h > self.height + EPS:
+                    raise ValueError("top profile rises above the panel height")
             for n in self.top:
                 floor = self.height - n.depth
                 if min(f(n.start), f(n.end)) <= floor + EPS:
@@ -257,7 +278,12 @@ class PanelOutline:
         return point_in_polygon(self.points(), x, y)
 
     def size(self) -> tuple[float, float]:
-        return (self.length, self.height)
+        """Bounding box of the actual outline; smaller than (length, height) when a
+        top profile stays below the nominal height everywhere."""
+        pts = self.points()
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        return (max(xs) - min(xs), max(ys) - min(ys))
 
 
 class PolygonOutline:

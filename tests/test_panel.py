@@ -258,3 +258,21 @@ def test_raised_ends_outline_is_compact():
                                      - 2 * sum(n.width * n.depth for n in fingers if n.end <= 4.0)
                                      - 2 * 0.25 * 0.5           # top corner finger notches
                                      - 3 * 0.25 * 1.75, rel=0.01)
+
+
+def test_stepped_ends_with_a_dropped_end():
+    from lasercut.panel import SteppedEnds
+    f = SteppedEnds(20.0, 4.0, 0.5, -0.5, 1.0, "ogee")
+    assert f(0) == 4.5 and f(1.0) == 4.5 and f(1.5) == pytest.approx(4.0)
+    assert f(10.0) == 4.0
+    assert f(18.5) == pytest.approx(4.0) and f(18.75) == pytest.approx(3.75)
+    assert f(19.0) == 3.5 and f(20.0) == 3.5
+    assert f(18.6) > 3.95 and f(18.9) < 3.55                   # inverted S is level at both ends
+    assert f.top == 4.5
+    g = SteppedEnds(20.0, 4.0, 0.0, -0.5, 1.0)
+    assert g(0) == 4.0 and g(0.5) == 4.0 and g.top == 4.0
+    assert g.samples(0.0, 10.0) == [0.0, 10.0]                  # no shoulder at the flat end
+    assert len(g.samples(18.0, 20.0)) == 2 + 13
+    r = SteppedEnds(20.0, 4.0, 0.0, -0.5, 1.0, "round")
+    assert r(18.5) == pytest.approx(4.0) and r(19.0) == 3.5
+    assert r(18.75) == pytest.approx(4.0 - (0.25 - 0.0625) ** 0.5)

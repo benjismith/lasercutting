@@ -28,56 +28,92 @@ def test_pitch_snaps_so_wall_cells_match_divider_cells(design):
 
 
 def test_egg_crate_notches_are_complementary(design):
-    assert design.level == 4.0 and design.slot_floor == 2.75
-    assert design.wall_slot_depth == 1.75 and design.divider_slot_depth == 1.25
+    assert design.level == 4.0 and design.back_level == 3.5
+    assert design.slot_floor == 2.75 and design.back_slot_floor == 2.25
+    assert design.wall_slot_depth == 1.75 and design.back_wall_slot_depth == 2.25
+    assert design.divider_slot_depth == 1.25
     assert design.wall_slot_depth + design.bottom_notch_depth == design.height
+    assert design.back_wall_slot_depth + design.back_bottom_notch_depth == design.height
     assert design.divider_slot_depth + design.bottom_notch_depth == design.level
 
 
-def test_raised_corners_and_flat_interior(design):
-    import math
-    H, level = design.height, design.level
-    for w in (p for p in design.panels if p.kind == "wall"):
-        f = w.outline.top_profile
-        L = w.outline.length
-        for x in (0.0, 0.5, 1.0, L - 1.0, L - 0.5, L):
-            assert f(x) == H                                  # full height over the outer inch
-        assert f(1.25) == pytest.approx(level + 0.25)          # middle of the S, where the two arcs meet
-        assert f(1.1) > H - 0.05 and f(1.4) < level + 0.05      # eases out of both levels
-        assert f(1.5) == pytest.approx(level) and f(L - 1.5) == pytest.approx(level)
-        for x in (2.0, L / 2, L - 2.0):
-            assert f(x) == level                              # flat interior
-        for n in w.outline.top:                               # every slot sits on the flat
-            assert f(n.start) == level and f(n.end) == level
-        pts = w.outline.points()
-        assert max(y for _, y in pts) == H
-        assert sum(1 for _, y in pts if abs(y - design.slot_floor) < 1e-9) == 2 * len(w.outline.top)
+def test_tops_front_corners_flat_interior_dropped_back(design):
+    H, level, back = design.height, design.level, design.back_level
+    walls = {p.name: p for p in design.panels if p.kind == "wall"}
+    W, D = design.width, design.depth
+    f = walls["wall_front"].outline.top_profile
+    for x in (0.0, 0.5, 1.0, W - 1.0, W - 0.5, W):
+        assert f(x) == H                                       # front corners full height
+    assert f(1.25) == pytest.approx(level + 0.25)              # middle of the S
+    assert f(1.1) > H - 0.05 and f(1.4) < level + 0.05         # eases out of both levels
+    for x in (2.0, W / 2, W - 2.0):
+        assert f(x) == level
+    b = walls["wall_back"].outline.top_profile
+    for x in (0.0, 1.0, W / 2, W - 1.0, W):
+        assert b(x) == back                                    # back wall flat at the back level
+    for name in ("wall_left", "wall_right"):
+        g = walls[name].outline.top_profile
+        assert g(0) == H and g(1.0) == H                       # front end raised
+        assert g(2.0) == level and g(D - 2.0) == level         # flat interior
+        assert g(D - 1.25) == pytest.approx(level - 0.25)      # inverted S, middle
+        assert g(D - 1.4) > level - 0.05 and g(D - 1.1) < back + 0.05
+        assert g(D - 1.0) == back and g(D) == back             # back end at the back level
+        for n in walls[name].outline.top:
+            assert g(n.start) == level and g(n.end) == level   # every slot on the flat
     for p in design.panels:
-        if p.kind in ("column", "row"):
+        if p.kind == "column":
+            c = p.outline.top_profile
+            assert c(0) == level and c(D / 2) == level and c(D - 1.0) == back and c(D) == back
+            for n in p.outline.top:
+                assert c(n.start) == level
+        if p.kind == "row":
             assert p.outline.top_profile is None and p.outline.height == level
 
 
-def test_ears_are_flush(design):
-    """A column divider's top at the wall equals the wall's top there, and a row
-    divider's top equals the column divider's top where it passes through."""
-    level = design.level
+def test_ears_are_flush_front_and_back(design):
+    level, back = design.level, design.back_level
     walls = {p.name: p for p in design.panels if p.kind == "wall"}
     for c in (p for p in design.panels if p.kind == "column"):
         x = c.placement.origin[0] + 0.125
-        assert walls["wall_front"].outline.top_profile(x) == level == c.outline.height
+        f = c.outline.top_profile
+        assert walls["wall_front"].outline.top_profile(x) == level == f(0.125)
+        assert walls["wall_back"].outline.top_profile(x) == back == f(c.outline.length - 0.125)
+        assert c.outline.bottom[0].depth == design.slot_floor
+        assert c.outline.bottom[-1].depth == design.back_slot_floor
     for r in (p for p in design.panels if p.kind == "row"):
         assert r.outline.height == level
+        assert all(n.depth == design.slot_floor for n in r.outline.bottom)
+
+
+def test_slot_floors_meet_the_ears(design):
+    """The back wall's slots reach down exactly as far as the column dividers' back
+    notches reach up, and likewise at the front."""
+    by_name = {p.name: p for p in design.panels}
+    front_floor = design.height - by_name["wall_front"].outline.top[0].depth
+    back_floor = design.height - by_name["wall_back"].outline.top[0].depth
+    col = by_name["column_1"].outline
+    assert front_floor == col.bottom[0].depth == 2.75
+    assert back_floor == col.bottom[-1].depth == 2.25
 
 
 def test_straight_tops_when_rise_is_zero():
     d = Design(OrganizerConfig(corner_rise=0, notch_depth=1.25))
     assert all(getattr(p.outline, "top_profile", None) is None for p in d.panels)
-    assert d.level == 4.5 and d.slot_floor == 3.25
+    assert d.level == 4.5 and d.slot_floor == 3.25 and d.back_level == 4.5
+
+
+def test_symmetric_box_when_back_level_is_none():
+    d = Design(OrganizerConfig(notch_depth=1.25, columns=[0]))
+    by_name = {p.name: p for p in d.panels}
+    assert by_name["wall_front"].outline is by_name["wall_back"].outline
+    g = by_name["wall_left"].outline.top_profile
+    assert g(0) == g(d.depth) == d.height
+    assert by_name["column_1"].outline.top_profile is None
 
 
 def test_first_slot_clears_the_shoulder_for_any_plateau():
     for plateau in (0.25, 1.0, 2.5, 4.0):
-        d = Design(OrganizerConfig(corner_plateau=plateau, gusset_leg=0))
+        d = Design(OrganizerConfig(corner_plateau=plateau, gusset_leg=0, back_level=3.5))
         for g in (d.column_grid, d.row_grid):
             assert min(g.values()) - 0.125 > plateau + 0.5
 
@@ -99,6 +135,8 @@ def test_panel_sizes(design):
 def test_cut_list_needs_passthrough_for_walls(design):
     fits = {label: fit for label, _, _, _, _, fit in design.cut_list()}
     assert fits["wall"] == "passthrough"
+    sizes = sorted((L, H) for label, L, H, _, _, _ in design.cut_list() if label == "wall")
+    assert sizes == [(20.125, 4.5), (29.625, 3.5), (29.625, 4.5)]   # back wall is a shorter part
     assert fits["column divider"] == "passthrough"
     assert fits["row divider"] == "fits bed"
     assert fits["corner gusset"] == "fits bed"
