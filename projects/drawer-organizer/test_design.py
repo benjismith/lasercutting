@@ -9,24 +9,28 @@ def design():
     return Design(CONFIG)
 
 
+T = CONFIG.thickness      # measured stock, about 0.205 in
+HALF = T / 2
+
+
 def test_outer_size_and_grid(design):
     assert design.width == 29.625 and design.depth == 20.125
     xs = list(design.column_grid.values())
     assert xs == sorted(xs) and len(xs) == 13
     assert xs[0] + xs[-1] == pytest.approx(design.width)  # symmetric about the centre
-    assert xs[0] - 0.125 >= 0.25 + 3.0                   # clear of the corner gusset
-    assert xs[0] - 0.125 >= 0.25 + 1.5 + 2.0 + 0.5       # and of the corner plateau, shoulder and gap
+    assert xs[0] - HALF >= T + 3.0                        # clear of the corner gusset
+    assert xs[0] - HALF >= T + 1.5 + 2.0 + 0.5            # and of the corner plateau, shoulder and gap
     assert len(design.row_grid) == 5
 
 
 def test_steps_make_wall_cells_match_divider_cells(design):
-    assert design.column_pitch == pytest.approx((design.width - 0.25) / 18)
-    assert design.row_pitch == pytest.approx((design.depth - 0.25) / 8)
+    assert design.column_pitch == pytest.approx((design.width - T) / 18)
+    assert design.row_pitch == pytest.approx((design.depth - T) / 8)
     widths = [w for _, w, _ in design.cells()]
     for w in widths[:3]:
-        assert w == pytest.approx(3 * design.column_pitch - 0.25)
-    assert widths[3] == pytest.approx(4 * design.column_pitch - 0.25)
-    assert widths[4] == pytest.approx(5 * design.column_pitch - 0.25)
+        assert w == pytest.approx(3 * design.column_pitch - T)
+    assert widths[3] == pytest.approx(4 * design.column_pitch - T)
+    assert widths[4] == pytest.approx(5 * design.column_pitch - T)
 
 
 def test_six_equal_columns_layout():
@@ -34,7 +38,7 @@ def test_six_equal_columns_layout():
     widths = [w for _, w, _ in d.cells()]
     assert len(widths) == 6
     assert all(w == pytest.approx(widths[0]) for w in widths)
-    assert widths[0] == pytest.approx((d.width - 2 * 0.25 - 5 * 0.25) / 6)
+    assert widths[0] == pytest.approx((d.width - 2 * T - 5 * T) / 6)
     assert d.panels[4].kind == "column" and sum(p.kind == "column" for p in d.panels) == 5
 
 
@@ -60,7 +64,7 @@ def test_tops_front_corners_flat_interior_dropped_back(design):
     f = walls["wall_front"].outline.top_profile
     w = design.shoulder_width(0.5)                             # how long a step's shoulder is
     assert w == 2.0
-    col_first = min(design.column_grid.values()) - 0.125
+    col_first = min(design.column_grid.values()) - HALF
     plateau = col_first - 0.5 - w                              # step finishes one gap before the first slot
     assert design.front_wall_plateau == (pytest.approx(plateau), pytest.approx(plateau))
     assert plateau > 1.5
@@ -73,11 +77,11 @@ def test_tops_front_corners_flat_interior_dropped_back(design):
     b = walls["wall_back"].outline.top_profile
     for x in (0.0, 1.0, W / 2, W - 1.0, W):
         assert b(x) == back                                    # back wall flat at the back level
-    last_slot_end = max(design.row_grid.values()) + 0.125
+    last_slot_end = max(design.row_grid.values()) + HALF
     step_start = last_slot_end + 0.5                           # the step begins one gap past the last slot
     assert design.back_plateau == pytest.approx(D - step_start - w)
     assert design.back_plateau > 2.0                           # the lowered band is most of the back quarter
-    row_first = min(design.row_grid.values()) - 0.125
+    row_first = min(design.row_grid.values()) - HALF
     front_plateau = row_first - 0.5 - w
     assert design.side_front_plateau == pytest.approx(front_plateau)
     for name in ("wall_left", "wall_right"):
@@ -107,10 +111,10 @@ def test_ears_are_flush_front_and_back(design):
     level, back = design.level, design.back_level
     walls = {p.name: p for p in design.panels if p.kind == "wall"}
     for c in (p for p in design.panels if p.kind == "column"):
-        x = c.placement.origin[0] + 0.125
+        x = c.placement.origin[0] + HALF
         f = c.outline.top_profile
-        assert walls["wall_front"].outline.top_profile(x) == level == f(0.125)
-        assert walls["wall_back"].outline.top_profile(x) == back == f(c.outline.length - 0.125)
+        assert walls["wall_front"].outline.top_profile(x) == level == f(HALF)
+        assert walls["wall_back"].outline.top_profile(x) == back == f(c.outline.length - HALF)
         assert c.outline.bottom[0].depth == design.slot_floor
         assert c.outline.bottom[-1].depth == design.back_slot_floor
     for r in (p for p in design.panels if p.kind == "row"):
@@ -161,11 +165,11 @@ def test_panel_sizes(design):
     assert by_name["column_1"].outline.length == design.depth
     row = by_name["row_2"]  # spans two columns, crossing one divider
     assert len(row.outline.bottom) == 3
-    x1 = design.column_grid[CONFIG.columns[0]] - 0.125
-    x3 = design.column_grid[CONFIG.columns[2]] + 0.125
+    x1 = design.column_grid[CONFIG.columns[0]] - HALF
+    x3 = design.column_grid[CONFIG.columns[2]] + HALF
     assert row.outline.length == pytest.approx(x3 - x1)
     # a row divider in one of the equal columns spans the cell plus two divider faces
-    assert by_name["row_1"].outline.length == pytest.approx(3 * design.column_pitch - 0.25 + 0.5)
+    assert by_name["row_1"].outline.length == pytest.approx(3 * design.column_pitch - T + 2 * T)
 
 
 def test_cut_list_needs_passthrough_for_walls(design):
@@ -181,7 +185,7 @@ def test_cut_list_needs_passthrough_for_walls(design):
 def test_gussets(design):
     gussets = [p for p in design.panels if p.kind == "gusset"]
     assert len(gussets) == 4
-    leg, t = 3.0, 0.25
+    leg, t = 3.0, T
     tabs = design.gusset_tab_spans
     assert [v for span in tabs for v in span] == pytest.approx([0.6, 1.2, 1.8, 2.4])
     expected = leg * leg / 2 + 2 * sum((b - a) * t for a, b in tabs)
@@ -215,7 +219,7 @@ def test_cells_add_up(design):
     for _, width, depths in design.cells():
         assert width > 1
         # cells plus divider thicknesses plus the two walls span the full depth
-        assert sum(depths) + 0.25 * (len(depths) - 1) + 0.5 == pytest.approx(design.depth)
+        assert sum(depths) + T * (len(depths) - 1) + 2 * T == pytest.approx(design.depth)
 
 
 def test_row_conflict_is_rejected():

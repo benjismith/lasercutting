@@ -72,7 +72,7 @@ All in `config.py`, all in inches.
 |---|---|---|
 | `clearance` | 1/16 per side | box is the drawer size minus twice this |
 | `height` | 4.5 | wall height at the raised corners |
-| `thickness` | 0.25 | **measure your actual stock with calipers** and set this |
+| `thickness` | 5.2 mm (0.2047 in) | measured with calipers, 5.1 to 5.2 mm; set to the thick reading so slots fit everywhere |
 | `column_steps` | 18 | grid steps across the width; must be even, and a multiple of any number of equal columns you want |
 | `row_steps` | 8 | grid steps along the depth; must be even |
 | `notch_depth` | 1.25 | how far a divider's ear engages its slot, measured from the interior level |
@@ -102,7 +102,7 @@ wall, whose top is lower. A column divider's bottom notches match: 2.75 in tall 
 front, 2.25 at the back, which gives it a definite front and back.
 
 **Grid steps.** The wall length minus one stock thickness is divided into an even
-number of equal steps: 18 across (a pitch of 1.632 in) and 8 front to back (2.484 in).
+number of equal steps: 18 across (a pitch of 1.634 in) and 8 front to back (2.490 in).
 A cell against a wall is bounded by one wall face and one divider face, a cell between
 dividers by two divider faces; with an even step count those come out the same width
 for the same number of steps, so any cell is simply steps x pitch minus thickness,
@@ -119,13 +119,13 @@ a multiple of m: 18 allows 2, 3, 6 or 9 equal columns.
 
 | column | clear width | cells front to back |
 |---|---|---|
-| 1 | 4.646 | 9.6875 / 9.6875 |
-| 2 | 4.646 | 7.203 / 12.172 |
-| 3 | 4.646 | 7.203 / 7.203 / 4.719 |
-| 4 | 6.278 | 9.6875 / 9.6875 |
-| 5 | 7.910 | 4.719 / 9.6875 / 4.719 |
+| 1 | 4.699 | 9.755 / 9.755 |
+| 2 | 4.699 | 7.265 / 12.245 |
+| 3 | 4.699 | 7.265 / 7.265 / 4.775 |
+| 4 | 6.333 | 9.755 / 9.755 |
+| 5 | 7.968 | 4.775 / 9.755 / 4.775 |
 
-**six-equal**: six columns of 3 steps, each 4.646 in wide, with the two outer columns
+**six-equal**: six columns of 3 steps, each 4.699 in wide, with the two outer columns
 split in half.
 
 The row dividers in both are demonstration sets; their lengths follow the columns
@@ -139,8 +139,8 @@ automatically.
 | back wall | 1 | 29.625 x 3.5 | passthrough |
 | side wall | 2 | 20.125 x 4.5 | passthrough |
 | column divider | 4 | 20.125 x 4.0 | passthrough |
-| row dividers | 6 | 5.15 to 8.41 x 4.0 | fit on the bed |
-| corner gusset | 4 | 3.25 x 3.25 | fit on the bed |
+| row dividers | 6 | 5.11 to 10.01 x 4.0 | fit on the bed |
+| corner gusset | 4 | 3.20 x 3.20 | fit on the bed |
 
 Every part that runs the full depth of the drawer is just over the 19.5 in bed, so the
 walls and column dividers all need the passthrough. Shrinking the box to 19.5 in deep
@@ -190,8 +190,9 @@ sections. Parts are nested as rectangles; no two are closer than 0.1 in.
    floor in each corner cell and the divider positions nearest the corners, which only
    ever made cells under 2.5 in wide. A 2 in leg keeps one more column position per
    side. The box is glued, so they earn their keep.
-5. **Stock thickness.** Nominal 1/4 in plywood is usually 0.2 to 0.23 in. The design
-   scales with `thickness`, so measure before cutting.
+5. **Stock thickness.** Measured 5.1 to 5.2 mm across the sheets; the design uses
+   5.2 mm so slots and finger notches fit the thick spots, and the thin spots get at
+   most 0.1 mm of play. The kerf coupon's slots step by 0.1 mm, which brackets that.
 6. **Bands set by the slots.** The raised front bands and the lowered back band each
    run from the corner to a shoulder that finishes half an inch short of the nearest
    slot, so the flat interior level spans exactly the slotted region. With the 2 in
