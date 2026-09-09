@@ -154,12 +154,19 @@ of slop front to back.
 nests every part onto the stock described in `config.STOCK`, pre-cut 48 x 19 in
 sheets fed long side first through the passthrough, and writes one SVG per sheet
 (`out/cut/three-plus-two-sheet1.svg`, `-sheet2.svg`), plus `kerf-coupon.svg` and a
-nesting report. Parts stay 1/8 in from the long edges. Each SVG is the size of the
-sheet in real inches, one closed path per part, cut strokes black, so it drops into
-the Glowforge app or Illustrator at true scale. Ease shoulders are true Bezier curves.
-The parts need two sheets; the second is packed from one end so the rest is a clean
-offcut. Different stock: `--sheet-width`, `--sheet-length` (0 for one sheet of any
-length, up to 20 in wide).
+nesting report. Parts stay 1/8 in from the long edges and 1 in from each end, so
+neither a slightly out-of-square sheet nor a little drift in the passthrough can
+clip a part. Each SVG is the size of the sheet in real inches, one closed path per
+part, cut strokes black, so it drops into the Glowforge app or Illustrator at true
+scale. Ease shoulders are true Bezier curves. The parts need two sheets; the second
+is packed from one end so the rest is a clean offcut. Different stock:
+`--sheet-width`, `--sheet-length` (0 for one sheet of any length, up to 20 in wide),
+`--end-margin`.
+
+| sheet | parts | occupied | clear at the far end |
+|---|---|---|---|
+| 1 | front wall, both side walls, all four column dividers, four row dividers | 1.00 to 45.68 in | 2.32 in |
+| 2 | back wall, two row dividers, all four gussets | 1.00 to 30.84 in | 17.16 in |
 
 **Kerf.** Every part is offset outward by half the kerf before writing, so slots come
 off the laser a stock thickness wide and ears a stock thickness thick. The kerf was

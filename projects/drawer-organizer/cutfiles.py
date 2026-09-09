@@ -18,6 +18,7 @@ Options:
     --cut-width IN       width to actually use, leaving a margin at each edge (default: sheet width less 0.25)
     --sheet-length IN    material length; parts are split across as many sheets as needed
                          (pass 0 for one sheet of any length)
+    --end-margin IN      material left clear at each end of the sheet (default from config.STOCK)
     --gap IN             spacing between parts (default 0.1)
     --out DIR
 """
@@ -47,23 +48,26 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--sheet-width", type=float, default=config.STOCK["width"])
     ap.add_argument("--cut-width", type=float)
     ap.add_argument("--sheet-length", type=float, default=config.STOCK["length"])
+    ap.add_argument("--end-margin", type=float, default=config.STOCK.get("end_margin", 0.0))
     ap.add_argument("--gap", type=float, default=0.1)
     ap.add_argument("--out", default=os.path.join(ROOT, "out", "cut"))
     return ap.parse_args()
 
 
 def nest_design(d: design.Design, cut_width: float, gap: float, kerf: float,
-                sheet_length: float | None):
-    """Nest all panels; returns a list of (nesting, panels-by-name) per sheet."""
+                sheet_length: float | None, end_margin: float = 0.0):
+    """Nest all panels; returns the nestings (one per sheet) and the panels by name.
+    Parts are packed into the sheet length less `end_margin` at each end."""
     by_name = {p.name: p for p in d.panels}
     parts = []
     for p in d.panels:
         w, h = p.outline.size()
         parts.append(Part(p.name, w + kerf, h + kerf))
+    usable = None if sheet_length is None else sheet_length - 2 * end_margin
     sheets = []
     remaining = parts
     while remaining:
-        result = nest(remaining, cut_width, gap, tries=2000, max_length=sheet_length)
+        result = nest(remaining, cut_width, gap, tries=2000, max_length=usable)
         if not result.placed:
             raise SystemExit("a part does not fit on the sheet at all")
         sheets.append(result)
@@ -72,9 +76,10 @@ def nest_design(d: design.Design, cut_width: float, gap: float, kerf: float,
 
 
 def write_sheet(path: str, nesting, by_name, sheet_width: float, cut_width: float,
-                kerf: float, gap: float, fixed_length: float | None) -> float:
+                kerf: float, gap: float, fixed_length: float | None,
+                end_margin: float = 0.0) -> float:
     margin = (sheet_width - cut_width) / 2
-    length = fixed_length if fixed_length is not None else nesting.length + 2 * margin
+    length = fixed_length if fixed_length is not None else nesting.length + 2 * end_margin
     sheet = Sheet(sheet_width, length)
     for pl in nesting.placed:
         panel = by_name[pl.name]
@@ -82,7 +87,7 @@ def write_sheet(path: str, nesting, by_name, sheet_width: float, cut_width: floa
         xs = [q[0] for q in pts]
         ys = [q[1] for q in pts]
         # the nested box includes the kerf allowance; centre the true outline in it
-        place = placement_transform(margin + pl.x + kerf / 2, margin + pl.y + kerf / 2,
+        place = placement_transform(margin + pl.x + kerf / 2, end_margin + pl.y + kerf / 2,
                                     min(xs), min(ys), max(xs), max(ys), pl.rotated)
         sheet.add(part_path(panel, kerf, place), pl.name)
     with open(path, "w") as f:
@@ -129,20 +134,23 @@ def main() -> None:
     d = design.Design(cfg)
     os.makedirs(args.out, exist_ok=True)
 
-    sheets, by_name = nest_design(d, args.cut_width, args.gap, args.kerf, args.sheet_length)
+    sheets, by_name = nest_design(d, args.cut_width, args.gap, args.kerf, args.sheet_length,
+                                  args.end_margin)
     report = [f"Layout {name}: {len(d.panels)} parts, kerf {args.kerf:g} in, gap {args.gap:g} in, "
-              f"sheet {args.sheet_width:g} in wide ({args.cut_width:g} in cuttable)"]
+              f"sheet {args.sheet_width:g} in wide ({args.cut_width:g} in cuttable), "
+              f"{args.end_margin:g} in clear at each end"]
     area = sum(p.outline.area() for p in d.panels)
     total_length = 0.0
     for i, nesting in enumerate(sheets, start=1):
         suffix = "" if len(sheets) == 1 else f"-sheet{i}"
         path = os.path.join(args.out, f"{name}{suffix}.svg")
         length = write_sheet(path, nesting, by_name, args.sheet_width, args.cut_width,
-                             args.kerf, args.gap, args.sheet_length)
+                             args.kerf, args.gap, args.sheet_length, args.end_margin)
         total_length += length
         report.append(f"\n{os.path.relpath(path, ROOT)}: {args.sheet_width:g} x {length:.2f} in"
-                      + (f", parts use the first {nesting.length:.2f} in; the last "
-                         f"{length - nesting.length:.2f} in is offcut" if args.sheet_length else ""))
+                      + (f", parts occupy {args.end_margin:.2f} to "
+                         f"{args.end_margin + nesting.length:.2f} in; {length - args.end_margin - nesting.length:.2f} in "
+                         f"clear at the far end" if args.sheet_length else ""))
         for pl in sorted(nesting.placed, key=lambda q: (q.y, q.x)):
             report.append(f"  {pl.name:<20} at x={pl.x:6.2f} y={pl.y:6.2f}  "
                           f"{pl.width:5.2f} x {pl.height:5.2f}{'  rotated' if pl.rotated else ''}")

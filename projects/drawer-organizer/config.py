@@ -67,4 +67,4 @@ CONFIG = LAYOUTS["three-plus-two"]
 # The plywood on hand: pre-cut sheets, fed long side first through the passthrough.
 # Parts are kept edge_margin in from each long edge. Kerf calibrated with the coupon
 # on 2026-09-08: slot II (0.008) a touch loose, slot III (0.012) a touch tight.
-STOCK = {"width": 19.0, "length": 48.0, "edge_margin": 0.125, "kerf": 0.010}
+STOCK = {"width": 19.0, "length": 48.0, "edge_margin": 0.125, "end_margin": 1.0, "kerf": 0.010}
