@@ -149,7 +149,7 @@ of slop front to back.
 
 ### Cut files
 
-    uv run python projects/drawer-organizer/cutfiles.py --layout three-plus-two --kerf 0.008
+    uv run python projects/drawer-organizer/cutfiles.py --layout three-plus-two
 
 nests every part onto the stock described in `config.STOCK`, pre-cut 48 x 19 in
 sheets fed long side first through the passthrough, and writes one SVG per sheet
@@ -162,13 +162,14 @@ offcut. Different stock: `--sheet-width`, `--sheet-length` (0 for one sheet of a
 length, up to 20 in wide).
 
 **Kerf.** Every part is offset outward by half the kerf before writing, so slots come
-off the laser a stock thickness wide and ears a stock thickness thick. The right kerf
-depends on the material and the laser, so cut the coupon first: it has three slots
-made for kerf settings 0.004 below, at, and 0.004 above the current value, marked
-with one, two and three score ticks. Whichever slot takes a scrap of the same stock
-with the friction you want names the kerf to pass with `--kerf`. Set `thickness` in
-the config to the measured stock before cutting the coupon, since the slots are made
-for that thickness.
+off the laser a stock thickness wide and ears a stock thickness thick. The kerf was
+calibrated with the coupon on this plywood: 0.010 in, recorded in `config.STOCK` and
+used by default. To recalibrate (new material, new laser), cut `kerf-coupon.svg`: it
+has three slots made for kerf settings 0.004 below, at, and 0.004 above the current
+value, marked with one, two and three score ticks. Whichever slot takes a scrap of
+the same stock with the friction you want names the kerf to pass with `--kerf`, and
+a fit between two slots means the value between them. Set `thickness` in the config
+to the measured stock before cutting the coupon, since the slots are made for it.
 
 **Passthrough.** The walls and column dividers are longer than the 11 in bed, so the
 sheet goes through the passthrough slot and the Glowforge app steps it through in

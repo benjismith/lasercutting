@@ -13,7 +13,7 @@ Writes into --out (default out/cut):
 
 Options:
     --layout NAME        a layout from config.LAYOUTS (default config.CONFIG)
-    --kerf IN            laser kerf; parts are offset outward by half of it (default 0.008)
+    --kerf IN            laser kerf; parts are offset outward by half of it (default from config.STOCK)
     --sheet-width IN     material width (at most 20, the Pro passthrough limit)
     --cut-width IN       width to actually use, leaving a margin at each edge (default: sheet width less 0.25)
     --sheet-length IN    material length; parts are split across as many sheets as needed
@@ -43,7 +43,7 @@ from lasercut.svg import CUT, SCORE, Sheet, part_path, placement_transform  # no
 def parse_args() -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     ap.add_argument("--layout")
-    ap.add_argument("--kerf", type=float, default=glowforge.KERF)
+    ap.add_argument("--kerf", type=float, default=config.STOCK.get("kerf", glowforge.KERF))
     ap.add_argument("--sheet-width", type=float, default=config.STOCK["width"])
     ap.add_argument("--cut-width", type=float)
     ap.add_argument("--sheet-length", type=float, default=config.STOCK["length"])
