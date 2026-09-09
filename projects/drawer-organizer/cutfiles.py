@@ -15,7 +15,8 @@ Options:
     --layout NAME        a layout from config.LAYOUTS (default config.CONFIG)
     --kerf IN            laser kerf; parts are offset outward by half of it (default from config.STOCK)
     --sheet-width IN     material width (at most 20, the Pro passthrough limit)
-    --cut-width IN       width to actually use, leaving a margin at each edge (default: sheet width less 0.25)
+    --edge-margin IN     material left clear along each long edge (default from config.STOCK)
+    --cut-width IN       most the laser can cut across the sheet (default 19.5, the bed width)
     --sheet-length IN    material length; parts are split across as many sheets as needed
                          (pass 0 for one sheet of any length)
     --end-margin IN      material left clear at each end of the sheet (default from config.STOCK)
@@ -46,7 +47,8 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--layout")
     ap.add_argument("--kerf", type=float, default=config.STOCK.get("kerf", glowforge.KERF))
     ap.add_argument("--sheet-width", type=float, default=config.STOCK["width"])
-    ap.add_argument("--cut-width", type=float)
+    ap.add_argument("--cut-width", type=float, default=glowforge.BED_LONG)
+    ap.add_argument("--edge-margin", type=float, default=config.STOCK.get("edge_margin", 0.0))
     ap.add_argument("--sheet-length", type=float, default=config.STOCK["length"])
     ap.add_argument("--end-margin", type=float, default=config.STOCK.get("end_margin", 0.0))
     ap.add_argument("--gap", type=float, default=0.1)
@@ -54,20 +56,25 @@ def parse_args() -> argparse.Namespace:
     return ap.parse_args()
 
 
-def nest_design(d: design.Design, cut_width: float, gap: float, kerf: float,
+def nest_design(d: design.Design, band: float, gap: float, kerf: float,
                 sheet_length: float | None, end_margin: float = 0.0):
     """Nest all panels; returns the nestings (one per sheet) and the panels by name.
-    Parts are packed into the sheet length less `end_margin` at each end."""
+
+    `band` is the width the parts may occupy and `sheet_length - 2 * end_margin` the
+    length. The nester insets everything by one `gap` from its own edges, so both are
+    passed with a gap added at each side to cancel that; the margins then come out
+    exactly as asked.
+    """
     by_name = {p.name: p for p in d.panels}
     parts = []
     for p in d.panels:
         w, h = p.outline.size()
         parts.append(Part(p.name, w + kerf, h + kerf))
-    usable = None if sheet_length is None else sheet_length - 2 * end_margin
+    usable = None if sheet_length is None else sheet_length - 2 * end_margin + 2 * gap
     sheets = []
     remaining = parts
     while remaining:
-        result = nest(remaining, cut_width, gap, tries=2000, max_length=usable)
+        result = nest(remaining, band + 2 * gap, gap, tries=2000, max_length=usable)
         if not result.placed:
             raise SystemExit("a part does not fit on the sheet at all")
         sheets.append(result)
@@ -75,11 +82,22 @@ def nest_design(d: design.Design, cut_width: float, gap: float, kerf: float,
     return sheets, by_name
 
 
-def write_sheet(path: str, nesting, by_name, sheet_width: float, cut_width: float,
+def occupied(nesting, gap: float) -> tuple[float, float]:
+    """Width and length the placed parts actually span, net of the nester's inset."""
+    return (max(pl.x + pl.width for pl in nesting.placed) - gap, nesting.length - gap)
+
+
+def write_sheet(path: str, nesting, by_name, sheet_width: float, band: float,
                 kerf: float, gap: float, fixed_length: float | None,
-                end_margin: float = 0.0) -> float:
-    margin = (sheet_width - cut_width) / 2
-    length = fixed_length if fixed_length is not None else nesting.length + 2 * end_margin
+                edge_margin: float = 0.0, end_margin: float = 0.0) -> float:
+    """Write one sheet. Parts sit `end_margin` from the near end and are centred
+    across the band, so whatever the packing leaves over is split evenly side to side.
+    They are not centred along the length: keeping them at one end leaves the rest of
+    the sheet as a single usable offcut."""
+    used_w, used_l = occupied(nesting, gap)
+    length = fixed_length if fixed_length is not None else used_l + 2 * end_margin
+    x0 = edge_margin - gap + (band - used_w) / 2      # centre the packed band
+    y0 = end_margin - gap
     sheet = Sheet(sheet_width, length)
     for pl in nesting.placed:
         panel = by_name[pl.name]
@@ -87,7 +105,7 @@ def write_sheet(path: str, nesting, by_name, sheet_width: float, cut_width: floa
         xs = [q[0] for q in pts]
         ys = [q[1] for q in pts]
         # the nested box includes the kerf allowance; centre the true outline in it
-        place = placement_transform(margin + pl.x + kerf / 2, end_margin + pl.y + kerf / 2,
+        place = placement_transform(x0 + pl.x + kerf / 2, y0 + pl.y + kerf / 2,
                                     min(xs), min(ys), max(xs), max(ys), pl.rotated)
         sheet.add(part_path(panel, kerf, place), pl.name)
     with open(path, "w") as f:
@@ -125,8 +143,9 @@ def main() -> None:
     args = parse_args()
     if args.sheet_width > glowforge.PASSTHROUGH_WIDTH + 1e-9:
         raise SystemExit(f"sheet width {args.sheet_width:g} exceeds the passthrough limit of {glowforge.PASSTHROUGH_WIDTH:g} in")
-    if args.cut_width is None:
-        args.cut_width = min(args.sheet_width - 2 * config.STOCK["edge_margin"], glowforge.BED_LONG)
+    band = min(args.sheet_width - 2 * args.edge_margin, args.cut_width)
+    if band <= 0:
+        raise SystemExit("the edge margins leave no width for parts")
     if args.sheet_length is not None and args.sheet_length <= 0:
         args.sheet_length = None
     cfg = config.LAYOUTS[args.layout] if args.layout else config.CONFIG
@@ -134,23 +153,26 @@ def main() -> None:
     d = design.Design(cfg)
     os.makedirs(args.out, exist_ok=True)
 
-    sheets, by_name = nest_design(d, args.cut_width, args.gap, args.kerf, args.sheet_length,
-                                  args.end_margin)
+    sheets, by_name = nest_design(d, band, args.gap, args.kerf, args.sheet_length, args.end_margin)
     report = [f"Layout {name}: {len(d.panels)} parts, kerf {args.kerf:g} in, gap {args.gap:g} in, "
-              f"sheet {args.sheet_width:g} in wide ({args.cut_width:g} in cuttable), "
-              f"{args.end_margin:g} in clear at each end"]
+              f"sheet {args.sheet_width:g} x {args.sheet_length:g} in; parts kept "
+              f"{args.edge_margin:g} in from the long edges and {args.end_margin:g} in from the ends "
+              f"(a {band:g} in band)"]
     area = sum(p.outline.area() for p in d.panels)
     total_length = 0.0
     for i, nesting in enumerate(sheets, start=1):
         suffix = "" if len(sheets) == 1 else f"-sheet{i}"
         path = os.path.join(args.out, f"{name}{suffix}.svg")
-        length = write_sheet(path, nesting, by_name, args.sheet_width, args.cut_width,
-                             args.kerf, args.gap, args.sheet_length, args.end_margin)
+        length = write_sheet(path, nesting, by_name, args.sheet_width, band,
+                             args.kerf, args.gap, args.sheet_length, args.edge_margin, args.end_margin)
         total_length += length
-        report.append(f"\n{os.path.relpath(path, ROOT)}: {args.sheet_width:g} x {length:.2f} in"
-                      + (f", parts occupy {args.end_margin:.2f} to "
-                         f"{args.end_margin + nesting.length:.2f} in; {length - args.end_margin - nesting.length:.2f} in "
-                         f"clear at the far end" if args.sheet_length else ""))
+        used_w, used_l = occupied(nesting, args.gap)
+        side = args.edge_margin + (band - used_w) / 2
+        report.append(f"\n{os.path.relpath(path, ROOT)}: {args.sheet_width:g} x {length:.2f} in; "
+                      f"parts span {side:.2f} to {args.sheet_width - side:.2f} across "
+                      f"({side:.2f} in clear on each side) and {args.end_margin:.2f} to "
+                      f"{args.end_margin + used_l:.2f} along ({length - args.end_margin - used_l:.2f} in "
+                      f"clear at the far end)")
         for pl in sorted(nesting.placed, key=lambda q: (q.y, q.x)):
             report.append(f"  {pl.name:<20} at x={pl.x:6.2f} y={pl.y:6.2f}  "
                           f"{pl.width:5.2f} x {pl.height:5.2f}{'  rotated' if pl.rotated else ''}")
